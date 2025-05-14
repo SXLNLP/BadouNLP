@@ -1,0 +1,2 @@
+1.配置环境，pycharm安装，python版本更新，相关依赖库使用pip install 完成安装
+2.git中创建个人文件夹，熟悉git操作流程
