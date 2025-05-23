@@ -9,13 +9,16 @@ class TorchModel(nn.Module):
         self.fc1 = nn.Linear(input_size, 10)
         self.activation = nn.ReLU()
         self.fc2 = nn.Linear(10, 5)
+        self.loss = nn.CrossEntropyLoss()
 
-    def forward(self, x):
+    def forward(self, x, y=None):
         x = self.fc1(x)
         x = self.activation(x)
-        out = self.fc2(x)
-
-        return out
+        y_pred = self.fc2(x)
+        if y is not None:
+            return self.loss(y_pred, y)  # 预测值和真实值计算损失
+        else:
+            return y_pred  # 输出预测结果
 
 
 # 构造数据data、target
@@ -31,7 +34,7 @@ def build_dataset(total_sample_num):
         x, y = build_sample()
         X.append(x)
         Y.append([y])
-    return torch.FloatTensor(X), torch.FloatTensor(Y)
+    return torch.FloatTensor(X), torch.LongTensor(Y)
 
 
 def evaluate(model):
@@ -63,24 +66,21 @@ def main():
 
     # 建立模型
     model = TorchModel(input_size)
-    # 选择损失函数、优化器
-    criterion = nn.CrossEntropyLoss()   # 使用了softmax
+    # 选择优化器
     optim = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    log = []
+
     # 创建训练集，正常任务是读取训练集
     train_x, train_y = build_dataset(train_sample)
-    train_y = train_y.to(torch.int64)
 
     # 训练过程
     for epoch in range(epoch_num):
         model.train()
         watch_loss = []
         for batch_index in range(train_sample // batch_size):
-            x = train_x[batch_index * batch_size : (batch_index + 1) * batch_size]
+            x = train_x[batch_index * batch_size: (batch_index + 1) * batch_size]
             y = train_y[batch_index * batch_size : (batch_index + 1) * batch_size]
-            out = model(x)
 
-            loss = criterion(out, y.reshape(-1))
+            loss = model(x, y.reshape(-1))  # 计算loss  model.forward(x,y)
             loss.backward()  # 计算梯度
             optim.step()  # 更新权重
             optim.zero_grad()  # 梯度归零
@@ -88,10 +88,9 @@ def main():
 
         print("=========第%d轮平均loss:%f" % (epoch + 1, np.mean(watch_loss)))
         acc = evaluate(model)  # 测试本轮模型结果
-        log.append([acc, float(np.mean(watch_loss))])
+
     # 保存模型
     torch.save(model.state_dict(), "model.bin")
-    print(log)
 
     return
 
