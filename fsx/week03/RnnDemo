@@ -1,0 +1,171 @@
+import json
+
+import torch
+import torch.nn as nn
+import numpy as np
+import random
+
+"""
+构造随机包含a的字符串，使用rnn进行多分类，类别为a第一次出现在字符串中的位置。
+
+1.字维度的选择
+ - 平方根法则：维度 ≈ √(词汇表大小)
+  （如 54 词元 → √54 ≈ 7.3 → 实际取 8-32 维）
+ - 对数法则：维度 ∝ log(词汇表大小)
+  （如 54 词元 → log₂(54) ≈ 5.7 → 实际取 8-16 维）
+
+2.embedding
+ - 词嵌入层解决的核心问题是：将离散的符号（如字符、单词）转换为连续的向量空间表示，使模型能从序列中学习语义和结构信息。
+ - 维度决定模型能力
+ - 序列长度决定模型处理方式
+ - 长度满足90%的样本即可
+ 
+3.RNN
+ - RNN 通过隐藏状态传递机制，能够记住序列中的历史信息
+ - 输入是序列数据（如文本、时间序列）。 
+   任务依赖序列中的位置信息。
+   序列长度可变（RNN 可处理任意长度输入）。
+"""
+
+def build_vocab():
+    with open('RnnDemoVocab.json', 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def build_sample(vocab, sentence_length):
+    # 随机从字表选取sentence_length个字，可能重复
+    x = [random.choice(list(vocab.keys())) for _ in range(sentence_length)]
+    # 查询a的位置
+    try:
+        y = x.index('a')
+    except ValueError:
+        y = sentence_length  # 类别为sentence_length表示a未出现
+
+    # 将字转换成序号，为了做embedding
+    x = [vocab.get(word, vocab['unk']) for word in x]
+    return x, y
+
+
+def build_dataset(sample_length, vocab, sentence_length):
+    dataset_x = []
+    dataset_y = []
+    for i in range(sample_length):
+        x, y = build_sample(vocab, sentence_length)
+        dataset_x.append(x)
+        dataset_y.append(y)
+    return torch.LongTensor(dataset_x), torch.LongTensor(dataset_y)
+
+
+# vector_dim 每个字符维度
+# sentence_length 字符长度
+# vocab 字典
+class TorchModel(nn.Module):
+    def __init__(self, vector_dim, sentence_length, vocab):
+        super(TorchModel, self).__init__()
+        self.embedding = nn.Embedding(len(vocab), vector_dim, padding_idx=0)
+        self.rnn = nn.RNN(vector_dim, vector_dim, batch_first=True)  # RNN层
+        # 输出类别数为sentence_length+1，因为包括a未出现的情况
+        self.classify = nn.Linear(vector_dim, sentence_length + 1)
+        self.loss = nn.CrossEntropyLoss()  # 使用交叉熵损失函数处理多分类问题
+
+    def forward(self, x, y=None):
+        x = self.embedding(x)  # [batch, seq_len, embed_dim]
+        x, _ = self.rnn(x)  # 使用RNN处理序列 [batch, seq_len, vector_dim]
+        # 使用最后一个时间步的输出作为分类器的输入
+        x = x[:, -1, :]  # [batch, vector_dim]
+        y_pred = self.classify(x)  # [batch, sentence_length + 1]
+
+        if y is not None:
+            return self.loss(y_pred, y)
+        else:
+            return torch.softmax(y_pred, dim=1)  # 返回概率分布
+
+
+# 测试准确率
+def evaluate(model, vocab, sentence_length):
+    model.eval()
+    x, y = build_dataset(200, vocab, sentence_length)
+
+    with torch.no_grad():
+        y_pred = model(x)
+        y_pred = torch.argmax(y_pred, dim=1)  # 获取预测的类别
+
+        # 计算准确率（完全匹配的比例）
+        correct = (y_pred == y).sum().item()
+        accuracy = correct / len(y)
+
+        # 计算平均位置误差（未找到的情况也算）
+        position_error = torch.abs(y_pred.float() - y.float()).mean().item()
+
+    print(f"位置预测准确率：{accuracy:.6f}")
+    print(f"平均位置误差：{position_error:.6f}")
+    return accuracy
+
+
+def main():
+    # 配置参数
+    epoch_num = 20  # 训练轮数
+    batch_size = 20  # 每次训练样本个数
+    train_sample = 500  # 每轮训练总共训练的样本总数
+    learning_rate = 0.001  # 学习率
+    vocab = build_vocab()  # 词典
+
+    char_dim = 53  # 每个字的维度
+    sentence_length = 6  # 样本文本长度
+    # 建立模型
+    model = TorchModel(char_dim, sentence_length, vocab)
+    optim = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    log = []
+    for epoch in range(epoch_num):
+        model.train(True)
+        watch_loss = []
+        for batch in range(int(train_sample / batch_size)):
+            x, y = build_dataset(batch_size, vocab, sentence_length)  # 构造一组训练样本
+            optim.zero_grad()  # 梯度归零
+            loss = model(x, y)  # 计算loss
+            loss.backward()  # 计算梯度
+            optim.step()  # 更新权重
+            watch_loss.append(loss.item())
+        print("=========\n第%d轮平均loss:%f" % (epoch + 1, np.mean(watch_loss)))
+        acc = evaluate(model, vocab, sentence_length)  # 测试本轮模型结果
+        log.append([acc, float(np.mean(watch_loss))])
+
+    # 保存模型
+    torch.save(model.state_dict(), "RnnModel.pth")
+    return
+
+
+# 使用训练好的模型做预测
+def predict(model_path, input_strings, vocab=None):
+    if vocab is None:
+        vocab = build_vocab()
+
+    char_dim = 53  # 每个字的维度
+    sentence_length = 6  # 样本文本长度
+    model = TorchModel(char_dim, sentence_length, vocab)  # 建立模型
+    model.load_state_dict(torch.load(model_path))  # 加载训练好的权重
+
+    x = []
+    for input_string in input_strings:
+        # 处理输入字符串长度不足或超过的情况
+        processed = [vocab.get(char, vocab['unk']) for char in input_string[:sentence_length]]
+        if len(processed) < sentence_length:
+            processed += [vocab['pad']] * (sentence_length - len(processed))
+        x.append(processed)
+
+    model.eval()  # 测试模式
+    with torch.no_grad():  # 不计算梯度
+        result = model(torch.LongTensor(x))  # 模型预测
+
+    for i, input_string in enumerate(input_strings):
+        pred_class = torch.argmax(result[i]).item()
+        prob = result[i][pred_class].item()
+        position = f"位置{pred_class}" if pred_class < sentence_length else "未找到"
+        print(f"输入：{input_string}, 预测：{position}, 概率值：{prob:.6f}")  # 打印结果
+
+
+if __name__ == "__main__":
+    # main()
+    # 示例预测
+    predict("RnnModel.pth", ["abcfadef", "helfaflo", "bbbabb", "0","sfaf"])
