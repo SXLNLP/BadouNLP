@@ -1,0 +1,111 @@
+import torch
+import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
+ #基于pytorch框架编写模型训练
+ #实现一个自行构造的找规律(机器学习)任务
+ #规律：x是一个5维向量，五维随机向量最大的数字在哪维就属于哪一类
+
+# 定义模型
+class TorchModel(nn.Module):
+    def __init__(self, input_size, num_classes):
+        super(TorchModel, self).__init__()
+        self.linear = nn.Linear(input_size, num_classes)  # 线性层
+        self.loss = nn.CrossEntropyLoss()  # 交叉熵损失函数
+
+    # 当输入真实标签，返回loss值；无真实标签，返回预测值
+    def forward(self, x, y=None):
+        y_pred = self.linear(x)  # (batch_size, input_size) -> (batch_size, 1)
+        if y is not None:
+            return self.loss(y_pred, y)  # 预测值和真实值计算损失
+        else:
+            return y_pred  # 输出预测结果
+
+
+# 随机生成样本的方法，内容为5维向量，最大值在哪一维就在哪一个类别中
+def build_random_sample():
+    x = np.random.random(5)
+    return x, x.argmax()
+
+# 随机生成样本集
+def build_random_dataset(num_of_sample):
+    X = []
+    Y = []
+    for i in range(num_of_sample):
+        x, y = build_random_sample()
+        X.append(x)
+        Y.append(y)
+    return torch.FloatTensor(X), torch.LongTensor(Y)
+
+
+# 模型测试，用于测试本周期内模型的准确率
+def evaluate(model):
+    model.eval()  # 测试
+    test_sample_num = 100
+    x, y = build_random_dataset(test_sample_num)
+    with torch.no_grad():
+        y_pred = model(x)  # 使用模型进行预测 等同于model.forward(x)
+        prediction  = torch.argmax(y_pred, dim=1)
+        correct = (prediction == y).sum().item()
+        accuracy = correct / test_sample_num
+        print("测试的正确率为：%.2f%%" % (accuracy * 100))
+        return accuracy
+
+
+def main():
+    # 设置模型参数
+    epoch_num = 100
+    batch_size = 20
+    train_sample = 5000
+    input_size = 5
+    num_classes = 5
+    learning_rate = 0.01
+    # 建立模型
+    model = TorchModel(input_size, num_classes)
+    # 选择优化器
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    log = []
+    # 读入训练集数据
+    train_x, train_y = build_random_dataset(train_sample)
+
+    # 训练模型
+    for epoch in range(epoch_num):
+        model.train()  # 进入训练模式
+        watch_loss = []
+        for batch_index in range(train_sample // batch_size):  # 每一个周期训练model的次数为总数据量除以batch_size取整
+            # 每次读入的样本为按照当前训练批次按照batch_size进行切片读取操作得到的数据
+            x = train_x[batch_index * batch_size: (batch_index + 1) * batch_size]
+            y = train_y[batch_index * batch_size: (batch_index + 1) * batch_size]
+            loss = model(x, y)  # 计算loss 操作等同于model.forward(x,y)
+            loss.backward()  # 计算梯度
+            optimizer.step()  # 更新权重
+            optimizer.zero_grad()  # 梯度归零
+            watch_loss.append(loss.item())  # 将本次训练的loss存下
+        print("----------\n第%d轮平均loss为：%f" % (epoch + 1, np.mean(watch_loss)))  # 对本训练周期的loss求平均
+        # 测试本轮模型
+        accuracy = evaluate(model)
+        log.append([accuracy, float(np.mean(watch_loss))])  # 储存数据用于画图
+    # 保存模型
+    torch.save(model.state_dict(), "model.bin")
+    # 画图
+    print(log)  # 输出测试结果
+    plt.plot(range(len(log)), [l[0] for l in log], label="accuracy")
+    plt.plot(range(len(log)), [l[1] for l in log], label="loss")
+    plt.legend()
+    plt.show()
+    return
+# 使用训练好的模型做预测
+def predict(model_path, input_vec):
+    input_size = 5
+    num_classes = 5
+    model = TorchModel(input_size, num_classes)
+    model.load_state_dict(torch.load(model_path))  # 加载训练好的权重
+    model.eval()  # 测试模式
+    with torch.no_grad():  # 不计算梯度
+        input_tensor = torch.FloatTensor(input_vec)
+        result = model(input_tensor)  # 模型预测
+    for vec, res in zip(input_vec, result):
+        print("输入：%s, 预测类别：%d" % (vec, res))
+
+if __name__ == "__main__":
+    main()
