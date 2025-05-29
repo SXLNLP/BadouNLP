@@ -1,0 +1,130 @@
+#============
+import torch
+import torch.nn as nn
+import numpy as np
+import random
+import json
+
+
+class TorchModel(nn.Module):
+    def __init__(self, vector_dim, sentence_length, vocab, hidden_size):
+        super(TorchModel, self).__init__()
+        self.embedding = nn.Embedding(len(vocab), vector_dim, padding_idx=0)
+        self.rnn = nn.RNN(vector_dim, hidden_size, batch_first=True)
+        self.classify = nn.Linear(hidden_size, sentence_length)
+        self.loss = nn.CrossEntropyLoss()
+
+    def forward(self, x, y=None):
+        x = self.embedding(x)
+        output, h = self.rnn(x)
+        output = output[:, -1, :]
+        y_pred = self.classify(output)
+
+        if y is not None:
+            y = y.squeeze().long()
+            return self.loss(y_pred, y)
+        else:
+            return torch.softmax(y_pred, dim=-1)  # Return probabilities
+
+
+def build_vocab(chars):
+    vocab = {"pad": 0}
+    for index, char in enumerate(chars):
+        vocab[char] = index + 1
+    vocab['unk'] = len(vocab)
+    return vocab
+
+
+def build_sample(vocab1, vocab2, sentence_length):
+    x = [random.choice(list(vocab1.keys())) for _ in range(sentence_length - 1)]
+    y = random.randint(0, sentence_length - 1)
+    x.insert(y, 'a')
+    x = [vocab2.get(word, vocab2['unk']) for word in x]
+    return x, y
+
+
+def build_dataset(sample_length, vocab1, vocab2, sentence_length):
+    dataset_x = []
+    dataset_y = []
+    for i in range(sample_length):
+        x, y = build_sample(vocab1, vocab2, sentence_length)
+        dataset_x.append(x)
+        dataset_y.append(y)
+    return torch.LongTensor(dataset_x), torch.LongTensor(dataset_y)
+
+def evaluate(model, vocab1, vocab2, sentence_length):
+    model.eval()
+    x, y = build_dataset(200, vocab1, vocab2, sentence_length)
+    correct = 0
+
+    with torch.no_grad():
+        y_pred = model(x)
+        y_pre = torch.argmax(y_pred, dim=1)
+        for y_p, y_t in zip(y_pre, y):
+            if y_p == y_t:
+                correct += 1
+    accuracy = correct / len(y)
+    print(f"正确预测个数：{correct}, 正确率：{accuracy:.2f}")
+    return accuracy
+
+def main():
+    epoch_num = 20  
+    batch_size = 20
+    train_sample = 1000 
+    char_dim = 20
+    sentence_length = 6
+    learning_rate = 0.001  
+    chars1 = 'bcdefghijklmnopqrstuvwxyz'
+    chars2 = 'abcdefghijklmnopqrstuvwxyz'
+
+    vocab1 = build_vocab(chars1)
+    vocab2 = build_vocab(chars2)
+    model = TorchModel(char_dim, sentence_length, vocab2, 64)  
+
+    optim = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    log = []
+
+    for epoch in range(epoch_num):
+        model.train()
+        watch_loss = []
+        for batch in range(int(train_sample / batch_size)):
+            x, y = build_dataset(batch_size, vocab1, vocab2, sentence_length)
+            optim.zero_grad()
+            loss = model(x, y)
+            loss.backward()
+            optim.step()
+            watch_loss.append(loss.item())
+
+        avg_loss = np.mean(watch_loss)
+        print(f"=========\n第{epoch + 1}轮平均loss:{avg_loss:.2f}")
+        acc = evaluate(model, vocab1, vocab2, sentence_length)
+        log.append([acc, avg_loss])
+
+    torch.save(model.state_dict(), "model.pth")
+    with open("vocab.json", "w", encoding="utf8") as f:
+        json.dump(vocab2, f, ensure_ascii=False, indent=2)
+
+def predict(model_path, vocab_path, input_strings):
+    char_dim = 20
+    sentence_length = 6
+    vocab = json.load(open(vocab_path, "r", encoding="utf8"))
+
+    model = TorchModel(char_dim, sentence_length, vocab, 64)
+    model.load_state_dict(torch.load(model_path))
+    x = []
+    for input_string in input_strings:
+        x.append([vocab.get(char, vocab['unk']) for char in input_string])
+
+    model.eval()
+    with torch.no_grad():
+        probabilities = model(torch.LongTensor(x))
+        predicted_positions = torch.argmax(probabilities, dim=1)
+
+    for i, input_string in enumerate(input_strings):
+        print(f"输入：{input_string}, 预测位置：{predicted_positions[i].item()}, 概率分布：{probabilities[i].tolist()}")
+
+
+if __name__ == "__main__":
+    main()
+    test_strings = ["afnvfe", "wzasdf", "rqwdea", "nakwww"]
+    predict("model.pth", "vocab.json", test_strings)
