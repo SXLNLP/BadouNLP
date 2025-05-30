@@ -1,0 +1,197 @@
+#coding:utf8
+
+import torch
+import torch.nn as nn
+import numpy as np
+import random
+import json
+
+"""
+
+构造随机包含a的字符串，
+使用rnn进行多分类，
+类别为a第一次出现在字符串中的位置。
+
+"""
+
+class TorchModel(nn.Module):
+    def __init__(self, vector_dim, sentence_length, vocab):
+        super(TorchModel, self).__init__()
+        self.embedding = nn.Embedding(len(vocab), vector_dim, padding_idx=0)
+        self.rnn = nn.RNN(vector_dim, vector_dim, batch_first=True)
+        # 对每个时间步输出进行分类
+        self.position_classifier = nn.Linear(vector_dim, 1)  # 预测是否为a
+        self.loss = nn.BCEWithLogitsLoss()
+        self.sentence_length = sentence_length
+
+    #当输入真实标签，返回loss值；无真实标签，返回预测值
+    def forward(self, x, y=None):
+        x = self.embedding(x)  # (batch, seq) -> (batch, seq, dim)
+        rnn_out, _ = self.rnn(x)  # (batch, seq, dim)
+
+        # 预测每个位置是否是第一个a
+        position_logits = self.position_classifier(rnn_out).squeeze(-1)  # (batch, seq)
+
+        if y is not None:
+            # 创建目标矩阵：第一个a的位置为1，其余为0
+            targets = torch.zeros_like(position_logits)
+            for i, pos in enumerate(y):
+                if 0 <= pos < self.sentence_length:
+                    targets[i, pos] = 1
+            return self.loss(position_logits, targets)
+
+        return position_logits
+
+#字符集随便挑了一些字，实际上还可以扩充
+#为每个字生成一个标号
+#{"a":1, "b":2, "c":3...}
+#abc -> [1,2,3]
+def build_vocab():
+    chars = "a你我他defghijklmnopqrstuvwxyz"  #字符集
+    vocab = {"pad":0}
+    for index, char in enumerate(chars):
+        vocab[char] = index+1   #每个字对应一个序号
+    vocab['unk'] = len(vocab) #26
+    return vocab
+
+#随机生成一个样本
+#从所有字中选取sentence_length个字
+def build_sample(vocab, sentence_length):
+    # 提高a出现的概率至40%
+    chars = list(vocab.keys())
+    x_chars = []
+    has_a = False
+    for _ in range(sentence_length):
+        if not has_a and random.random() < 0.4 and 'a' in chars:
+            x_chars.append('a')
+            has_a = True
+        else:
+            x_chars.append(random.choice(chars))
+
+    a_pos = next((i for i, c in enumerate(x_chars) if c == 'a'), -1)
+    x_indices = [vocab.get(c, vocab['unk']) for c in x_chars]
+    return torch.LongTensor(x_indices), a_pos
+
+#建立数据集
+#输入需要的样本数量。需要多少生成多少
+def build_dataset(sample_length, vocab, sentence_length):
+    dataset_x = []
+    dataset_y = []
+    for _ in range(200):
+        # 生成单个样本
+        x_chars = [random.choice(list(vocab.keys())) for _ in range(sample_length)]
+
+        # 计算第一个'a'的位置（从0开始），没有则返回-1
+        a_pos = next((i for i, c in enumerate(x_chars) if c == 'a'), -1)
+
+        # 转换为索引列表
+        x_indices = [vocab.get(c, vocab['unk']) for c in x_chars]
+
+        dataset_x.append(x_indices)
+        dataset_y.append(a_pos)
+    return torch.LongTensor(dataset_x), torch.LongTensor(dataset_y)
+
+#建立模型
+def build_model(vocab, char_dim, sentence_length):
+    model = TorchModel(char_dim, sentence_length, vocab)
+    return model
+
+#测试代码
+#用来测试每轮模型的准确率
+def evaluate(model, vocab, sample_length):
+    model.eval()
+    # 生成测试集
+    samples = [build_sample(vocab, sample_length) for _ in range(200)]
+    x = torch.stack([s[0] for s in samples])  # 堆叠为批次张量
+    y_true = torch.LongTensor([s[1] for s in samples])
+    # 统计位置分布
+    pos_counts = {i: 0 for i in range(-1, sample_length)}
+    for pos in y_true:
+        pos_counts[int(pos)] += 1
+    print("位置分布:", {k: v for k, v in pos_counts.items() if v > 0})
+    with torch.no_grad():
+        # 模型预测 (输出应为每个位置的分数)
+        y_pred = model(x)  # 形状应为 [num_samples, sample_length+1] (+1考虑-1情况)
+
+        # 取预测概率最大的位置
+        pred_positions = torch.argmax(y_pred, dim=1)
+        pred_pos = torch.where(pred_positions == sample_length, -1, pred_positions)
+
+        # 计算准确率
+        correct = (pred_pos == y_true).sum().item()
+        accuracy = correct / 200
+
+    print(f"正确预测数: {correct}/{200}, 准确率: {accuracy:.4f}")
+
+
+def main():
+    #配置参数
+    epoch_num = 10        #训练轮数
+    batch_size = 20       #每次训练样本个数
+    train_sample = 500    #每轮训练总共训练的样本总数
+    char_dim = 20         #每个字的维度
+    sentence_length = 6   #样本文本长度
+    learning_rate = 0.005 #学习率
+    # 建立字表
+    vocab = build_vocab()
+    # 建立模型
+    model = build_model(vocab, char_dim, sentence_length)
+    # 选择优化器
+    optim = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    log = []
+    # 训练过程
+    for epoch in range(epoch_num):
+        model.train()
+        total_loss = 0
+        for _ in range(int(train_sample / batch_size)):
+            x, y = build_dataset(batch_size, vocab, sentence_length)
+            optim.zero_grad()
+            loss = model(x, y)
+            loss.backward()
+            optim.step()
+            total_loss += loss.item()
+
+        avg_loss = total_loss / (train_sample / batch_size)
+        print(f"\n第{epoch + 1}轮平均loss:{avg_loss:.4f}")
+        acc = evaluate(model, vocab, sentence_length)
+
+    torch.save(model.state_dict(), "model.pth")
+    with open("vocab.json", "w", encoding="utf8") as f:
+        json.dump(vocab, f, ensure_ascii=False, indent=2)
+
+
+    #保存模型
+    torch.save(model.state_dict(), "model.pth")
+    # 保存词表
+    writer = open("vocab.json", "w", encoding="utf8")
+    writer.write(json.dumps(vocab, ensure_ascii=False, indent=2))
+    writer.close()
+    return
+
+#使用训练好的模型做预测
+def predict(model_path, vocab_path, input_strings):
+    char_dim = 20  # 每个字的维度
+    sentence_length = 6  # 样本文本长度
+    vocab = json.load(open(vocab_path, "r", encoding="utf8")) #加载字符表
+
+    model = build_model(vocab, char_dim, sentence_length)     #建立模型
+    model.load_state_dict(torch.load(model_path, weights_only=True)) #加载训练好的权重
+
+    x = []
+    for input_string in input_strings:
+        x.append([vocab[char] for char in input_string])  #将输入序列化
+    model.eval()   #测试模式
+    with torch.no_grad():
+        logits = model(torch.LongTensor(x))
+        preds = torch.sigmoid(logits)
+        for s, p in zip(input_strings, preds):
+            max_prob, pos = torch.max(p, 0)
+            actual_pos = next((i for i, c in enumerate(s[:6]) if c == 'a'), -1)
+            print(f"输入: {s} → 类别{actual_pos},概率: {max_prob:.2f}")
+
+
+
+if __name__ == "__main__":
+    main()
+    test_strings = ["faffee", "az你dfg", "rqwdea", "n我awww","fgffee", "rz你dfg", "rqadea", "n我zwww"]
+    predict("model.pth", "vocab.json", test_strings)
