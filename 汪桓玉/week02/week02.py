@@ -9,7 +9,7 @@ import os
 # 改用交叉熵实现一个多分类任务，五维随机向量最大的数字在哪维就属于哪一类。
 
 # 输入：5维向量
-# 输出：五维--->取最大值下标 为类别
+# 输出：五维--->取最大值下标 为类别11111111111111111
 # 模型  线性->relu->线性->交叉熵
 
 # 创建torch模型
@@ -33,10 +33,20 @@ class TorchModel(nn.Module):
             print('y',y_pred)
             return y_pred
 
+# 数据归一化函数
+def normalize_data(data):
+    # 针对每个样本分别归一化，保持相对大小关系
+    data_min = np.min(data, axis=1, keepdims=True)
+    data_max = np.max(data, axis=1, keepdims=True)
+    # 避免除零错误
+    data_range = np.maximum(data_max - data_min, 1e-10)
+    normalized_data = (data - data_min) / data_range
+    return normalized_data
+
 def build_sanple():
-    sample = np.random.uniform(1,100,5)
+    sample = np.random.uniform(0, 100000, 5)  # 修改为0-100范围
     max_index = np.argmax(sample)
-    return sample,max_index
+    return sample, max_index
   
 
 def create_train_sanple(train_sample):
@@ -48,14 +58,18 @@ def create_train_sanple(train_sample):
         Y.append(y)
     X = np.array(X)
     Y = np.array(Y)
-    return torch.FloatTensor(X),torch.LongTensor(Y)
+    
+    # 对数据进行归一化处理
+    X_normalized = normalize_data(X)
+    
+    return torch.FloatTensor(X_normalized), torch.LongTensor(Y)
 
 def evaluate(model):
     model.eval()
     test_sample = 100
     x,y = create_train_sanple(test_sample)
     with torch.no_grad():
-        acc = calculate_result(model,x,y)
+        _,acc = calculate_result(model,x,y)
     return acc
 
 def predict(model_src):
@@ -63,10 +77,10 @@ def predict(model_src):
     hidden_size = 10  # 添加隐藏层维度
     output_size = 5  # 添加输出维度
 
-    eval_size = 1000 # 预测个数
+    eval_size = 10000 # 预测个数
     model = TorchModel(input_size, hidden_size, output_size)
     model.load_state_dict(torch.load(model_src, weights_only=True))
-    x,y= create_train_sanple(eval_size)
+    x,y = create_train_sanple(eval_size)
     model.eval() # 测试模式
     with torch.no_grad(): # 不计算梯度
         print(f'总预测样本：{eval_size}')
