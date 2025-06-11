@@ -9,6 +9,29 @@ import os
 # 构造随机包含a的字符串，使用rnn进行多分类，类别为a第一次出现在字符串中的位置。
 
 class TorchModel(nn.Module):
+    """
+    一个基于RNN的神经网络模型，用于预测字符'a'在字符串中首次出现的位置
+    
+    该模型包含以下组件:
+    - embedding层: 将输入字符转换为向量表示
+    - RNN层: 处理序列数据
+    - Dropout层: 防止过拟合
+    - 线性层: 将RNN输出映射到预测类别
+    
+    参数:
+        vector_dim (int): 词向量维度
+        hidden_size (int): RNN隐藏层大小
+        vocab (dict): 词汇表字典
+    
+    输入:
+        x: 输入序列张量
+        y: 目标标签张量(可选)
+    
+    输出:
+        如果提供y，返回损失值
+        否则返回预测概率分布
+    """
+    
     def __init__(self,vector_dim,hidden_size,vocab):
         super(TorchModel,self).__init__()
         self.embedding = nn.Embedding(len(vocab), vector_dim, padding_idx=0)  #embedding层
@@ -180,3 +203,4 @@ if __name__ == '__main__':
         print("找到模型文件，开始预测...")
     
     predict(path_model,path_dict)
+    
