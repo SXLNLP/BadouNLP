@@ -1,0 +1,69 @@
+# week3作业
+# 词典；每个词后方存储的是其词频，词频仅为示例，不会用到，也可自行修改
+import numpy as np
+
+dict = {"经常": 0.1,
+        "经": 0.05,
+        "有": 0.1,
+        "常": 0.001,
+        "有意见": 0.1,
+        "歧": 0.001,
+        "意见": 0.2,
+        "分歧": 0.2,
+        "见": 0.05,
+        "意": 0.05,
+        "见分歧": 0.05,
+        "分": 0.1}
+
+# 待切分文本
+sentence = "经常有意见分歧"
+
+"""
+传入句子、词典、当前列表和最终列表
+找到第一个字符：
+如果字符长度为0且当前列表不为空，current_list添加最终列表后返回（退出递归）
+找到词典里以第一个字符开始的所有词
+循环所有词：
+根据词切割字符串加入列表
+剩余部分递归调用该方法（传入切割后的句子、词典、当前列表和最终列表）
+"""
+def all_cut(sentence, my_dict):
+    current_list, target_list = [], []
+    cut_recursion(sentence, my_dict, current_list, target_list)
+    return target_list
+
+def cut_recursion(sentence, my_dict, current_list, target_list):
+    if sentence == '' and len(current_list) != 0:
+        target_list.append(current_list.copy())  # ❗️使用current_result.copy()来保存当前状态的副本
+        return
+    char = sentence[0]
+    start_res = [key for key in my_dict.keys() if key.startswith(char)]
+    for key in start_res:
+        current_list.append(key)
+        cut_recursion(sentence[len(key):], my_dict, current_list, target_list)
+        current_list.pop()  # ❗️撤销选择：移除刚刚添加的词，为尝试下一个前缀做准备
+    return
+
+
+
+# 目标输出;顺序不重要
+target_res = [
+    ['经常', '有意见', '分歧'],
+    ['经常', '有意见', '分', '歧'],
+    ['经常', '有', '意见', '分歧'],
+    ['经常', '有', '意见', '分', '歧'],
+    ['经常', '有', '意', '见分歧'],
+    ['经常', '有', '意', '见', '分歧'],
+    ['经常', '有', '意', '见', '分', '歧'],
+    ['经', '常', '有意见', '分歧'],
+    ['经', '常', '有意见', '分', '歧'],
+    ['经', '常', '有', '意见', '分歧'],
+    ['经', '常', '有', '意见', '分', '歧'],
+    ['经', '常', '有', '意', '见分歧'],
+    ['经', '常', '有', '意', '见', '分歧'],
+    ['经', '常', '有', '意', '见', '分', '歧']
+]
+
+if __name__ == '__main__':
+    target = all_cut(sentence, dict)
+    print(target)
