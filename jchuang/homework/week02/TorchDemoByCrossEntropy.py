@@ -12,22 +12,24 @@ import matplotlib.pyplot as plt
 
 """
 
+
 class TorchModel(nn.Module):
     def __init__(self, input_size):
         super(TorchModel, self).__init__()
         # 线性层
         self.linear = nn.Linear(input_size, 5)
+        self.activation = nn.Softmax(dim=1)
         # loss函数采用交叉熵损失
         self.loss = nn.CrossEntropyLoss()
 
     # 当输入真实标签，返回loss值；无真实标签，返回预测值
     def forward(self, x, y=None):
-        y_pred = self.linear(x)  # (batch_size, input_size) -> (batch_size, 1)
-        # y_pred = self.activation(x)  # (batch_size, 1) -> (batch_size, 1)
+        y_pred = self.linear(x)  # (batch_size, input_size) -> (batch_size, 5)
+        # y_pred = self.activation(x)  # (batch_size, 5) -> (batch_size, 1)
         if y is not None:
             return self.loss(y_pred, y)  # 预测值和真实值计算损失
         else:
-            return y_pred  # 输出预测结果
+            return self.activation(y_pred)  # 输出预测结果
 
 
 # 生成一个样本, 样本的生成方法，代表了我们要学习的规律
@@ -46,7 +48,7 @@ def build_dataset(total_sample_num):
         x, y = build_sample()
         X.append(x)
         Y.append(y)
-    return torch.FloatTensor(X), torch.LongTensor(Y)
+    return torch.FloatTensor(np.array(X)), torch.LongTensor(np.array(Y))
 
 
 # 测试代码
@@ -136,7 +138,7 @@ def predict(model_path, input_vec):
         pre_result = model.forward(torch.FloatTensor(input_vec))
 
     print("\n--- 预测结果 ---")
-    for vec, res in zip(input_vec,pre_result):
+    for vec, res in zip(input_vec, pre_result):
         # 打印结果
         print("输入：%s, 预测类别：%d" % (vec, np.argmax(res)))
 
