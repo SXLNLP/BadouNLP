@@ -1,0 +1,301 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import matplotlib.pyplot as plt
+
+"""
+构造随机包含A的字符串，使用rnn进行多分类，类别为A第一次出现在字符串中的位置。
+字符串构造规则：最大字符7个，至少含有1个A,最后一位不是A
+"""
+class TorchModel(nn.Module):
+    def __init__(self,vector_dim, sentence_length,vocab,  hidden_size,dropout_rate=0.3):
+        """
+
+        :param vector_dim: 一个字符是几维向量
+        :param sentence_length: 一句话有多少个字符
+        :param vocab: 字符字典
+        :param hidden_size: 隐藏层维度，越大模型越复杂
+        """
+        super(TorchModel,self).__init__()
+        self.embedding = nn.Embedding(len(vocab),vector_dim,padding_idx=0) # enbedding层
+        #self.pool = nn.AvgPool1d(sentence_length) # 池化层
+        self.layer = nn.RNN(vector_dim,hidden_size,bias=False,batch_first=True) # Rnn层
+        self.dropout = nn.Dropout(dropout_rate)  # Dropout 层（在 RNN 之后）
+        self.final_layer = nn.Linear(hidden_size,sentence_length)
+        self.loss = nn.functional.cross_entropy
+
+    def forward(self, x, y=None):
+        x = self.embedding(x)
+        #x = x.transpose(1,2)
+        #x= self.pool(x)
+        #x = x.squeeze()
+        #print("embedding finish--------")
+        #print("x.shape",x.shape)
+        hidden_output, _ = self.layer(x) # shape: (batch_size, seq_len, hidden_size)
+        #print("hidden_output.shape", hidden_output.shape)
+        hidden_output = self.dropout(hidden_output)  # 对 RNN 输出进行 Dropout
+        # 取最后一个时间步的隐藏状态（用于分类）
+        final_layer_input = hidden_output[:, -1, :]  # shape: (batch_size, hidden_size)
+        #print("final_layer_input.shape", final_layer_input.shape)
+        # 全连接层输出分类结果
+        y_pred = self.final_layer(final_layer_input)
+        #print("y_pred.shape",y_pred.shape)
+        if y is not None:
+            return self.loss(y_pred,y)
+        else:
+            return nn.functional.softmax(y_pred,1)
+
+
+# 定义字典表
+def build_vocab():
+    vocab = {}
+    vocab["[pad]"] = 0
+    char = "PigyStore你我他AwBdMkv"
+    for i,c in enumerate(char):
+        vocab[c] = i + 1
+    vocab["[unk]"] = len(char) +1
+    return vocab
+
+print(build_vocab())
+
+
+def build_sentence(word_count,vocab,max_str_count):
+    """
+
+    :param word_count: 本句话中有多少个字符
+    :param vocab: 字符字典
+    :return: sentence一个句子
+             sentence_num 按照字典把转化成数字
+    """
+    sentence = ""
+    word_list = list(vocab.keys())
+    #随机从字表选取sentence_length个字，可能重复
+    #x = [random.choice(list(vocab.keys())) for _ in range(sentence_length)] # 也可以这样实现
+    for word_index in range(word_count):
+        random_key_index = np.random.randint(1,len(word_list)-1) # 不想取到pad & unk的索引
+        sentence += word_list[random_key_index]
+    # 随机插入一个A
+    if len(sentence)-1 == 0 :
+        return "A",[vocab.get("A",vocab["[unk]"]) ]
+    else:
+        random_a_index = np.random.randint(2,len(sentence)-1)
+        sentence = sentence[:random_a_index-1] + "A" + sentence[random_a_index+1:]
+        # 将句子转化成数字，方便embedding
+        sentence_num = [vocab.get(word,vocab["[unk]"]) for word in sentence]
+        # 少的字符用padding填充
+        if len(sentence_num) < max_str_count:
+            sentence_num += [vocab.get("[pad]")] * (max_str_count - len(sentence_num))
+
+        return sentence,sentence_num
+
+
+# 根据x生成y
+def get_y(sentence_list):
+    y_list = []
+    for sentence in sentence_list:
+        a_index = sentence.find("A") # 如果没有则返回-1，如果有，则返回第一个A出现的索引
+        y = a_index
+        y_list.append(y)
+    return y_list
+
+def build_sample(sample_num,max_str_count):
+    """
+
+    :param sample_num: 需要的样本个数，多少句话
+    :param max_str_count: 每句话中最大字符串个数
+    :return:sentence_list:句子字典
+            sentence_num_list:按照字典，把句子转化成数字
+    """
+    char = "PigyStore你我他AwBdMkv"
+    vocab = build_vocab()
+    sentence_list = []
+    sentence_num_list = []
+    for s in range(sample_num):
+
+        #随机定义本句话所含的字符串个数:最少4个，最多7个
+        word_count = np.random.randint(4,max_str_count+1)
+
+        #生成本句话
+        sentence,sentence_num = build_sentence(word_count,vocab,max_str_count)
+        sentence_list.append(sentence)
+        sentence_num_list.append(sentence_num)
+    # 生成y
+    y_list = get_y(sentence_list)
+    return sentence_list,sentence_num_list,y_list
+
+
+print("随机生成的sentence",build_sentence(5,build_vocab(),6))
+
+print("随机生成的sentence列表",build_sample(3,6))
+
+
+# 建立data_set,需要把x,y转化成张量传人torch
+def build_dataset(sample_num,max_str_count):
+    sentence_list,sentence_num_list,y_list = build_sample(sample_num, max_str_count)
+    x = torch.LongTensor(sentence_num_list)
+    y = torch.LongTensor(y_list)
+    return x,y
+
+
+
+# 评估模型
+def eval_model(model,sample_num,max_str_count):
+    model.eval()  # 切换到评估模式 通常与with torch.no_grad()禁用梯度计算搭配使用
+    # 生成验证集样本
+    x,y = build_dataset(sample_num,max_str_count)
+    # 对验证集样本进行描述
+    # 假设 Y 是 PyTorch/TensorFlow 张量，先转成 NumPy
+    y_np = y.cpu().numpy() if isinstance(y, torch.Tensor) else np.array(y)
+    # 统计每个类别的数量（自动计算 0~4 的分布）
+    counts = np.bincount(y_np, minlength=max_str_count)  # minlength=5 确保返回长度为 5 的数组
+    # 打印结果
+    test_num = len(y)
+    print(f"本次测试数据 {test_num} 条，{max_str_count}种类型分布条数为 {counts[0]},{counts[1]},{counts[2]},{counts[3]},{counts[4]}")
+
+    # 计算正确率
+    with torch.no_grad():
+        y_pred = model(x)
+        #print("ypred----",y_pred)
+        # 获取每个样本最大值和索引
+        max_values,max_indexs = torch.max(y_pred,dim = 1) #是2D张量（形状 [batch_size, num_classes]），才需要用 dim=1 取每行的最大值
+
+        condition = (y == max_indexs)
+        correct_num = condition.sum().item()
+        print(f"预测正确个数：{correct_num},正确率%f" % (round(correct_num/test_num,2)))
+
+    return round(correct_num/test_num,2)
+
+# 进行训练
+
+def main():
+    # 定义参数
+    vector_dim = 10 # input size
+    sentence_length = 7
+    hidden_size = 12
+
+    epoch_num = 50  # 训练轮数
+    sample_num = 2000  # 样本数量
+    batch_size = 50  # 每次训练样本个数
+    learning_rate = 0.01  # 学习率
+
+    # 建立字表
+    vocab = build_vocab()
+    # 生成样本
+    x,y = build_dataset(sample_num,sentence_length)
+    # 建立模型
+    model = TorchModel(vector_dim, sentence_length, vocab, hidden_size)
+    # 选择优化器
+    optim = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    model.train()
+    watch_loss = []
+    log = []
+    for epoch in range(epoch_num):
+        for batch_index in range(sample_num // batch_size):
+            x_train = x[batch_index * batch_size: (batch_index+1) * batch_size]
+            y_train = y[batch_index * batch_size: (batch_index + 1) * batch_size]
+            optim.zero_grad()  # 梯度归0
+            loss = model(x_train,y_train)  # 计算loss，返回值是一维张量
+            loss.backward()  # 计算梯度
+            optim.step()  # 更新权重
+
+            watch_loss.append(loss.item())
+
+        print("----第%d轮训练，平均loss:%f" % (epoch+1, np.mean(watch_loss)))
+        acc = eval_model(model,100,sentence_length) # 随机生成100个测试样本
+        log.append([acc,np.mean(watch_loss)])
+
+    # 保存模型
+    torch.save(model.state_dict(),"model_rnn.bin")
+    # 画图
+    #print(log)
+    plt.plot(range(len(log)), [l[0] for l in log], label="acc")  # 画acc曲线
+    plt.plot(range(len(log)), [l[1] for l in log], label="loss")  # 画loss曲线
+    plt.legend()
+    plt.show()
+    return
+
+
+
+# 预测
+def predict(sentence,model_path,max_str_count=7):
+    """
+    一种预测方法，直接根据用户输入的字符串检验
+    :param sentence:
+    :param vocab:
+    :param model_path:
+    :return:
+    """
+
+    vocab = build_vocab()
+    # 将字符串转化成数字
+    sentence_num = [vocab.get(word, vocab["[unk]"]) for word in sentence]
+    # 少的字符用padding填充
+    if len(sentence_num) < max_str_count:
+        sentence_num += [vocab.get("[pad]")] * (max_str_count - len(sentence_num))
+    sentence_list = []
+    sentence_list.append(sentence)
+    y = get_y(sentence_list)
+    x = torch.LongTensor(sentence_num)
+    y = torch.LongTensor(y)
+
+    # 加载权重
+    vector_dim = 10
+    sentence_length = 7
+    hidden_size = 12
+    model = TorchModel(vector_dim, sentence_length, vocab, hidden_size)
+    model.eval()
+    model.load_state_dict(torch.load(model_path))
+    # 切换到评估模式 通常与with torch.no_grad()禁用梯度计算搭配使用
+
+    # 进行预测
+    with torch.no_grad():
+        x_2d = x.unsqueeze(0)  # 因为只有一条样本，没有batch_size维度，因此在第 0 维增加一个维度
+        #print(x_2d)
+        result = model(x_2d)
+        max_value,max_index = torch.max(result,dim=1) # 2d张量 batch_size,class_num
+        print("输入 %s, 预测类别 %d,真实类别 %d,  预测概率 %f" % (sentence, max_index.item(), y,max_value.item()))
+
+
+
+def predict_2(model_path,sample_num):
+    """
+    另一种预测方法，直接随机生成句子进行检验
+    :param model_path:
+    :param sample_num:
+    :return:
+    """
+
+    # 加载权重
+    vector_dim = 10
+    sentence_length = 7
+    hidden_size = 12
+    model = TorchModel(vector_dim, sentence_length, build_vocab(), hidden_size)
+    model.eval()  # 切换到评估模式 通常与with torch.no_grad()禁用梯度计算搭配使用
+    model.load_state_dict(torch.load(model_path))
+    # 生成验证集样本
+    sentence_list,sentence_num_list,y_list = build_sample(sample_num,sentence_length)
+    for i,item in enumerate(sentence_num_list):
+        x = torch.LongTensor(sentence_num_list[i])
+        y = torch.LongTensor(y_list[i])
+        with torch.no_grad():
+            x_2d = x.unsqueeze(0)  # 因为只有一条样本，没有batch_size维度，因此在第 0 维增加一个维度
+            result = model(x_2d)
+            max_value, max_index = torch.max(result, dim=1)  # 2d张量 batch_size,class_num
+            print("输入 %s,真实类别 %d, 预测类别 %d,  预测概率 %f" % (sentence_list[i],y_list[i], max_index.item(), max_value.item()))
+    print(sentence_num_list)
+
+if __name__ == '__main__':
+    main()
+    #"PigyStore你我他AwBdMkv"
+    print(predict("AckvcAc","model_rnn.bin"))
+    print(predict("idrAPeA","model_rnn.bin"))
+    print(predict("erASPcA","model_rnn.bin"))
+    print(predict("PAiSA我",  "model_rnn.bin"))
+    print(predict("PAASA我", "model_rnn.bin"))
+    print(predict("BAA他", "model_rnn.bin"))
+    print(predict("B我AAtP",  "model_rnn.bin"))
+    print(predict("itAAik", "model_rnn.bin"))
+    print(predict("gAAS我v", "model_rnn.bin"))
+    #print(predict_2("model_rnn.bin",5))
+
