@@ -1,0 +1,132 @@
+import  numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+#模型类
+class MyTorchModel(nn.Module):
+    def __init__(self, input_size, midum_size, output_size):
+        super(MyTorchModel,self).__init__()
+        self.fc1= nn.Linear(input_size,midum_size)
+        self.activtion1 = nn.ReLU()
+        self.fc2 = nn.Linear(midum_size,output_size)
+        self.activation2 = nn.Sigmoid()
+        self.loss = nn.functional.cross_entropy
+
+    def forward(self,x):
+        x1 = self.fc1(x)
+        x1 = self.activtion1(x1)
+        y1 = self.fc2(x1)
+        y_pred = self.activation2(y1)
+        return y_pred
+
+    def save(self,model_name):
+        torch.save(self.state_dict(),model_name)
+
+#分类类
+class MyClassificationModel():
+    def __init__(self,dimension):
+        self.dim = dimension
+
+    def build_sample(self):
+        x = np.random.randint(0, 100, self.dim)
+        xMax = np.max(x)
+        y = np.zeros(self.dim)
+        for index in range(self.dim):
+            if (x[index] == xMax):
+                y[index] = 1
+                break
+        return x, y
+
+    def build_dataset(self,total_sample_num):
+        xList = []
+        yList = []
+        for i in range(total_sample_num):
+            x,y = self.build_sample()
+            xList.append(x)
+            yList.append(y)
+        return torch.FloatTensor(xList),torch.FloatTensor(yList)
+
+#训练类
+class MyTrainModel():
+    def __init__(self, torchmodel, optimizer):
+        self.torchmodel = torchmodel
+        self.optimizer = optimizer
+
+    def trainmodel(self, xlist, ylist, epoch_count, bat_size):
+        log = []
+        for epoch in range(epoch_count):
+            watch_loss = []
+            self.torchmodel.train()
+            xlistcount  = len(list(xlist))
+            for batch_index in range(xlistcount // bat_size):
+                x = xlist[bat_size * batch_index:bat_size * (batch_index + 1)]
+                y = ylist[bat_size * batch_index:bat_size * (batch_index + 1)]
+                y_pred = self.torchmodel(x)
+                curLoss = self.torchmodel.loss(y_pred, y)
+                curLoss.backward()
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                watch_loss.append(curLoss.item())
+            print("=========\n第%d轮平均loss:%f" % (epoch + 1, np.mean(watch_loss)))
+            acc = self.evaluate()
+            log.append([acc, float(np.mean(watch_loss))])
+            print(log)
+
+    def evaluate(self):
+        self.torchmodel.eval()
+        cl = MyClassificationModel(5)
+        test_sample_num = 100
+        x, y = cl.build_dataset(test_sample_num)
+        wrongc,correctc = 0,0
+        with torch.no_grad():
+            y_pred = self.torchmodel.forward(x)
+            for y_p, y_t in zip(y_pred, y):
+                success = True
+                for y_pi,y_ti in zip(y_p, y_t):
+                    if y_pi >= 0.5 and y_ti == 1:
+                        break
+                    elif y_pi < 0.5 and y_ti == 1:
+                        success = False
+                        break
+                    elif y_pi >= 0.5 and y_ti == 0:
+                        success = False
+                        break
+                if success:
+                    correctc += 1
+                else:
+                    wrongc += 1
+            print("预测正确%d个，错误%d个，正确率%.2f" %(correctc,wrongc,correctc/test_sample_num))
+        return correctc/test_sample_num
+
+if __name__ == "__main__":
+    epoch_count = 80
+    input_size = 5
+    medium_size = 3
+    output_size = 5
+    dimension = 5
+    train_sample = 5000
+    bat_size = 20
+    learning_rate = 0.001
+
+    mytorch = MyTorchModel(input_size,medium_size,output_size)
+    myclass = MyClassificationModel(dimension)
+    xlist,ylist = myclass.build_dataset(train_sample)
+    optimizer = optim.Adam(mytorch.parameters(), lr=learning_rate)
+    mytrain = MyTrainModel(mytorch,optimizer)
+    mytrain.trainmodel(xlist, ylist, epoch_count, bat_size)
+    mytorch.save("model.bin")
+
+
+
+
+
+
+
+
+
+
+
+
+
+

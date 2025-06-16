@@ -1,0 +1,69 @@
+安装miniconda：
+https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/
+
+清华源：
+参考网址：https://blog.csdn.net/weixin_42951763/article/details/139782339
+配置conda源
+清华源官网：https://mirrors.tuna.tsinghua.edu.cn/help/anaconda/
+
+生成.condarc文件，在Anaconda Prompt，输入以下命令生成.condarc文件：
+conda config --set show_channel_urls yes
+
+执行后，会在用户目录下生成一个.condarc文件
+
+将下面代码复制到.condarc文件中，其中最后两行作用是修改默认conda创建环境的路径。
+channels:
+  - defaults
+show_channel_urls: true
+default_channels:
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
+custom_channels:
+  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  msys2: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  menpo: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  pytorch-lts: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  simpleitk: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  deepmodeling: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/
+envs_dirs:
+  - D:\ProgramData\miniconda3\envs
+
+保存文件后，在命令窗口执行命令conda clean -i清除索引缓存，保证用的是镜像站提供的索引。
+
+换源完成后，新建虚拟环境
+conda create -n badouPy312 python=3.12
+创建完成后，切换环境：
+conda activate mypy
+安装jieba包以及jupyterlab：
+Pip install jieba
+pip install jupyter 安装 jupyter
+pip install jupyterlab-language-pack-zh-CN 安装jupyter中文插件
+
+cude12.6安装
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+验证：
+import torch # 如果pytorch安装成功即可导入
+print(torch.cuda.is_available()) # 查看CUDA是否可用
+print(torch.cuda.device_count()) # 查看可用的CUDA数量
+print(torch.version.cuda) # 查看CUDA的版本号
+
+pip install transformers
+pip install peft
+pip install Scikit-learn
+pip install Pandas
+  
+Pycharm的终端设置：
+cmd.exe "/K" "D:\ProgramData\miniconda3\Scripts\activate.bat" badouPy312
+
+查看所有新增的默认安装库
+conda config --show create_default_packages
+
+conda config --add create_default_packages python=3.12
+conda config --add create_default_packages pandas
+conda config --add create_default_packages jupyter
+
+删除环境
+conda remove -n xxxxx(名字) --all

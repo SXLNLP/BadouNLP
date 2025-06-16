@@ -1,0 +1,138 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import random
+import matplotlib.pyplot as plt
+
+'''
+基于pytorch框架编写模型训练
+实现自行构造的找规律学习任务（机器学习）
+规律：x是一个5维向量，如果第i个数最大，则x为第i类样本，i = 1, 2, 3, 4, 5。如：第1个数最大，则x为1类样本
+'''
+
+class TorchModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super().__init__()
+        self.linear1 = nn.Linear(input_dim, hidden_dim)
+        self.linear2 = nn.Linear(hidden_dim, 5)
+        self.loss = nn.CrossEntropyLoss()
+
+    def forward(self, x, y=None):
+        x = self.linear1(x)
+        y_pred = self.linear2(x)
+        if y is not None:
+            return self.loss(y_pred, y)
+        else:
+            return y_pred
+
+# 生成一个样本
+def build_sample():
+    x = np.random.random(5)
+    y = np.zeros(5)
+    for i in range(5):
+        if x[i] == max(x):
+            y[i] = 1
+    return x, y
+
+# 生成一批样本
+def build_dataset(total_sample_num):
+    X = []
+    Y = []
+    for i in range(total_sample_num):
+        x, y = build_sample()
+        X.append(x)
+        Y.append(y)
+    return torch.FloatTensor(X), torch.FloatTensor(Y)
+
+# 预测类别
+def class_predict(y):
+    y_class = np.zeros(np.shape(y))
+    for i in range(len(y)):
+        for j in range(len(y[i])):
+            if y[i][j] == max(y[i]):
+                y_class[i][j] = 1
+    return y_class
+
+#测试每轮模型的准确率
+def evaluate(model):
+    model.eval()
+    test_sample_num = 100
+    x, y = build_dataset(test_sample_num)
+    sum_class = torch.sum(y, dim=0)
+    print("本次预测集中有", end="")
+    for i in range(5):
+        print(f"{int(sum_class[i])}个{i+1}类样本", end='、')
+    print()
+    correct, wrong = 0, 0
+    with torch.no_grad():
+        y_pred = model(x)
+        y_class = class_predict(y_pred)
+        # print(list(zip(y_pred, y_class, y)))
+        for y_c, y_t in zip(y_class, y):
+            y_bool = (y_c == y_t)
+            # print(y_bool)
+            if y_bool.all():
+                correct += 1
+            else:
+                wrong += 1
+    print(f"正确预测个数：{correct}，正确率:{correct / test_sample_num}")
+    return correct / test_sample_num
+
+# 训练模型
+def main():
+    hidden_dim = 5
+    epoch_num = 22
+    batch_size = 25
+    train_sample = 10000
+    input_dim = 5
+    learning_rate = 0.001
+
+    model = TorchModel(input_dim, hidden_dim)
+    optim = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    log = []
+    train_x,train_y = build_dataset(train_sample)
+    for epoch in range(epoch_num):
+        model.train()
+        watch_loss = []
+        for batch_index in range(train_sample // batch_size):
+            x = train_x[batch_index * batch_size : (batch_index + 1) * batch_size]
+            y = train_y[batch_index * batch_size : (batch_index + 1) * batch_size]
+            loss = model.forward(x, y)
+            loss.backward()
+            optim.step()
+            optim.zero_grad()
+            watch_loss.append(loss.item())
+        print(f"=============\n第{epoch + 1}轮平均loss：{np.mean(watch_loss)}")
+        acc = evaluate(model)
+        log.append([acc,float(np.mean(watch_loss))])
+    torch.save(model.state_dict(), 'mymodel.bin')
+    print(log)
+    plt.plot(range(len(log)), [l[0] for l in log], label='acc')
+    plt.plot(range(len(log)), [l[1] for l in log], label='loss')
+    plt.legend()
+    plt.show()
+    return
+
+# 使用训练好的模型做预测
+def predict(model_path, input_vec):
+    input_dim = 5
+    hidden_dim = 5
+    model = TorchModel(input_dim, hidden_dim)
+    model.load_state_dict(torch.load(model_path))
+    print(model.state_dict())
+
+    model.eval()
+    with torch.no_grad():
+        result = model.forward(torch.FloatTensor(input_vec))
+        result_class = torch.argmax(result, dim=1)
+    for vec, res, resc in zip(input_vec, result, result_class):
+        print(f"输入：{vec}，预测类别：{resc + 1}，输出值：{res}")
+
+if __name__ == '__main__':
+    main()
+    test_vec = [[0.79928129, 0.69845977, 0.83108848, 0.54467517, 0.80874797],
+                [0.77741033, 0.82821794, 0.69605845, 0.94190242, 0.54011032],
+                [0.7649107, 0.74387179, 0.8530603, 0.62514847, 0.33024312],
+                [0.14051043, 0.44771449, 0.65485048, 0.82864178, 0.68044676],
+                [0.96661613, 0.2822677, 0.94213468, 0.61127777, 0.78767825]]
+    predict("mymodel.bin", test_vec)

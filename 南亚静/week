@@ -1,0 +1,204 @@
+# coding:utf8
+
+import torch
+import torch.nn as nn
+import numpy as np
+import random
+import json
+import matplotlib.pyplot as plt
+
+
+class TorchModel(nn.Module):
+    def __init__(self, vector_dim, sentence_length, vocab):
+        super(TorchModel, self).__init__()
+        self.embedding = nn.Embedding(len(vocab), vector_dim, padding_idx=0)
+        self.rnn = nn.RNN(vector_dim, vector_dim, batch_first=True)
+        self.classify = nn.Linear(vector_dim, sentence_length + 1)
+        self.loss = nn.CrossEntropyLoss()  # 使用交叉熵损失
+
+    def forward(self, x, y=None):
+        x = self.embedding(x)  # (batch_size, sen_len, vector_dim)
+        output, _ = self.rnn(x)  # output: (batch_size, sen_len, vector_dim)
+
+        # 使用最后一个时间步的输出作为整个序列的表示
+        last_output = output[:, -1, :]  # (batch_size, vector_dim)
+
+        y_pred = self.classify(last_output)  # (batch_size, sentence_length+1)
+
+        if y is not None:
+            return self.loss(y_pred, y.squeeze())  # 计算交叉熵损失
+        else:
+            return y_pred
+
+
+def build_vocab():
+    chars = "abcdefghijklmnopqrstuvwxyz"  # 只使用小写字母
+    vocab = {"pad": 0}
+    for index, char in enumerate(chars):
+        vocab[char] = index + 1
+    vocab['unk'] = len(vocab)
+    return vocab
+
+
+def build_sample(vocab, sentence_length):
+    # 生成随机字符串（可能不包含'a'）
+    x = [random.choice(list(vocab.keys())[1:-1]) for _ in range(sentence_length)]
+
+    # 随机决定是否插入'a'（确保80%样本包含'a'）
+    if random.random() < 0.8:
+        # 随机选择插入位置（0到sentence_length-1）
+        a_index = random.randint(0, sentence_length - 1)
+        x[a_index] = 'a'
+    else:
+        a_index = sentence_length  # 表示未出现
+
+    # 记录第一个'a'的位置
+    first_a_index = sentence_length  # 默认未出现
+    for i, char in enumerate(x):
+        if char == 'a':
+            first_a_index = i
+            break
+
+    x = [vocab.get(char, vocab['unk']) for char in x]
+    return x, first_a_index
+
+
+def build_dataset(sample_length, vocab, sentence_length):
+    dataset_x = []
+    dataset_y = []
+    for _ in range(sample_length):
+        x, y = build_sample(vocab, sentence_length)
+        dataset_x.append(x)
+        dataset_y.append([y])
+    return torch.LongTensor(dataset_x), torch.LongTensor(dataset_y)  # 使用LongTensor
+
+
+def build_model(vocab, char_dim, sentence_length):
+    model = TorchModel(char_dim, sentence_length, vocab)
+    return model
+
+
+def evaluate(model, vocab, sentence_length):
+    model.eval()
+    x, y = build_dataset(200, vocab, sentence_length)
+
+    # 统计各类别样本数
+    class_count = [0] * (sentence_length + 1)
+    for label in y:
+        class_count[label.item()] += 1
+    print("各类别样本数量:", class_count)
+
+    correct = 0
+    with torch.no_grad():
+        y_pred = model(x)
+        predicted = torch.argmax(y_pred, dim=1)
+        correct = (predicted == y.squeeze()).sum().item()
+
+    accuracy = correct / y.size(0)
+    print(f"正确预测个数: {correct}, 正确率: {accuracy:.4f}")
+    return accuracy
+
+
+def main():
+    # 配置参数
+    epoch_num = 20
+    batch_size = 32
+    train_sample = 2000
+    char_dim = 32
+    sentence_length = 6
+    learning_rate = 0.001
+
+    vocab = build_vocab()
+    model = build_model(vocab, char_dim, sentence_length)
+    optim = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    accuracies = []
+    losses = []
+
+    for epoch in range(epoch_num):
+        model.train()
+        epoch_loss = []
+
+        # 分批训练
+        for _ in range(int(train_sample / batch_size)):
+            x, y = build_dataset(batch_size, vocab, sentence_length)
+            optim.zero_grad()
+            loss = model(x, y)
+            loss.backward()
+            optim.step()
+            epoch_loss.append(loss.item())
+
+        avg_loss = np.mean(epoch_loss)
+        losses.append(avg_loss)
+        print(f"Epoch {epoch + 1}/{epoch_num}, Loss: {avg_loss:.4f}")
+
+        # 每2轮评估一次
+        if (epoch + 1) % 2 == 0:
+            acc = evaluate(model, vocab, sentence_length)
+            accuracies.append(acc)
+
+    # 可视化训练过程
+    plt.figure(figsize=(12, 5))
+    plt.subplot(1, 2, 1)
+    plt.plot(losses, label='Training Loss')
+    plt.title('Training Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(range(2, epoch_num + 1, 2), accuracies, 'o-', label='Accuracy')
+    plt.title('Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.ylim(0, 1)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('training_metrics.png')
+
+    # 保存模型和词汇表
+    torch.save(model.state_dict(), "position_model.pth")
+    with open("position_vocab.json", "w", encoding="utf8") as f:
+        json.dump(vocab, f, ensure_ascii=False, indent=2)
+
+
+def predict(model_path, vocab_path, input_strings):
+    char_dim = 32
+    sentence_length = 6
+    vocab = json.load(open(vocab_path, "r", encoding="utf8"))
+    model = build_model(vocab, char_dim, sentence_length)
+    model.load_state_dict(torch.load(model_path))
+
+    # 处理输入
+    processed = []
+    for s in input_strings:
+        # 截断或填充到固定长度
+        s = s[:sentence_length].ljust(sentence_length, 'x')
+        encoded = [vocab.get(char, vocab['unk']) for char in s]
+        processed.append(encoded)
+
+    model.eval()
+    with torch.no_grad():
+        tensor = torch.LongTensor(processed)
+        predictions = model(tensor)
+        predicted_indices = torch.argmax(predictions, dim=1)
+
+    for i, s in enumerate(input_strings):
+        idx = predicted_indices[i].item()
+        position = f"位置 {idx}" if idx < sentence_length else "未出现"
+        print(f"输入: '{s}' => 首个'a' {position} (预测索引: {idx})")
+
+
+if __name__ == "__main__":
+    main()
+
+    # 测试样例
+    test_strings = [
+        "bcdae",  # a在位置3
+        "axxxxx",  # a在位置0
+        "xyzaxy",  # a在位置3
+        "bbbbbb",  # 无a
+        "a",  # 短输入
+        "banana"  # 多个a（应识别第一个）
+    ]
+    predict("position_model.pth", "position_vocab.json", test_strings)
