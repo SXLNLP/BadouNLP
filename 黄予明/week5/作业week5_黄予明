@@ -1,0 +1,123 @@
+#!/usr/bin/env python3  
+#coding: utf-8
+
+#基于训练好的词向量模型进行聚类
+#聚类采用Kmeans算法
+import math
+import re
+import json
+import jieba
+import numpy as np
+from gensim.models import Word2Vec
+from sklearn.cluster import KMeans
+from collections import defaultdict
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+#输入模型文件路径
+#加载训练好的模型
+def load_word2vec_model(path):
+    model = Word2Vec.load(path)
+    return model
+
+def load_sentence(path):
+    sentences = set()
+    with open(path, encoding="utf8") as f:
+        for line in f:
+            sentence = line.strip()
+            sentences.add(" ".join(jieba.cut(sentence)))
+    #print("获取句子数量：", len(sentences))
+    return sentences
+
+#将文本向量化，句向量是词向量的平均
+def sentences_to_vectors(sentences, model):
+    vectors = []
+    for sentence in sentences:
+        words = sentence.split()  #sentence是分好词的，空格分开
+        vector = np.zeros(model.vector_size)
+        #所有词的向量相加求平均，作为句子向量
+        for word in words:
+            try:
+                vector += model.wv[word]
+            except KeyError:
+                #部分词在训练中未出现，用全0向量代替
+                vector += np.zeros(model.vector_size)
+        vectors.append(vector / len(words))
+    return np.array(vectors)
+
+#优化使用TF-IDF加权平均
+def TFIDF_sentences_to_vectors(sentences, model):
+    sentences_list = list(sentences)
+    tfidf = TfidfVectorizer(token_pattern=r"(?u)\b\w+\b", stop_words=None)
+    tfidf_matrix = tfidf.fit_transform(sentences_list)
+    # 词到索引的映射
+    word2idx = tfidf.vocabulary_
+    # 句子向量
+    vectors = []
+    for idx, sentence in enumerate(sentences_list):
+        words = sentence.split()
+        vector = np.zeros(model.vector_size)
+        weight_sum = 0.0
+        for word in words:
+            if word in model.wv and word in word2idx:
+                tfidf_weight = tfidf_matrix[idx, word2idx[word]]
+                vector += model.wv[word] * tfidf_weight
+                weight_sum += tfidf_weight
+        if weight_sum > 0:
+            vector = vector / weight_sum
+        vectors.append(vector)
+    return np.array(vectors)
+
+# 计算距离（余弦距离，距离越小越相似）
+def cosine_distance(vec1, vec2):
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+    if norm1 == 0 or norm2 == 0:
+        return 1.0  # 向量全零时，定义距离为最大
+    return 1 - np.dot(vec1, vec2) / (norm1 * norm2)
+
+def main():
+    model = load_word2vec_model(r"model.w2v") #加载词向量模型
+    sentences = load_sentence("titles.txt")  #加载所有标题
+    #sentence_vectors = sentences_to_vectors(sentences, model)   #将所有标题向量化
+    sentence_vectors = TFIDF_sentences_to_vectors(sentences, model)  
+    sentence_vector_dict = dict(zip(sentences, sentence_vectors)) #将句子与向量对应起来
+    
+    n_clusters = 10  #指定聚类数量
+    #print("指定聚类数量：", n_clusters)
+    kmeans = KMeans(n_clusters)  #定义一个kmeans计算类
+    kmeans.fit(sentence_vectors)          #进行聚类计算
+   
+    # 每个句子都有簇的标签
+    sentence_label_dict = defaultdict(list)
+    for sentence, label in zip(sentences, kmeans.labels_): #样本与每个样本对应的簇
+        sentence_label_dict[label].append(sentence)
+        # print(label) 
+        # print(sentence)
+
+    # 输出每个簇内的句子，按距离中心从近到远排序
+    for label, sentences_in_cluster in sentence_label_dict.items():
+        center = kmeans.cluster_centers_[label]
+        # 计算距离
+        sentences_with_distance = [
+            (sentence, np.linalg.norm(sentence_vector_dict[sentence] - center)) #欧式距离
+            for sentence in sentences_in_cluster
+        ]
+        print("---------")
+        # 按距离升序排序
+        sentences_with_distance.sort(key=lambda x: x[1])
+        print(f"cluster {label} :")
+        for i in range(min(10, len(sentences_with_distance))):
+            print(sentences_with_distance[i][0].replace(" ", ""), f"(欧式距离中心: {sentences_with_distance[i][1]:.4f})")
+        
+        sentences_with_distance2 = [
+            (sentence, cosine_distance(sentence_vector_dict[sentence], center))
+            for sentence in sentences_in_cluster
+        ]
+        sentences_with_distance2.sort(key=lambda x: x[1])
+        
+        print(f"cluster {label} :")
+        for i in range(min(10, len(sentences_with_distance2))):
+            print(sentences_with_distance2[i][0].replace(" ", ""), f"(余弦距离中心: {sentences_with_distance2[i][1]:.4f})")
+  
+if __name__ == "__main__":
+    main()
