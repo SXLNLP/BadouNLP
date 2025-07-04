@@ -1,0 +1,4 @@
+Model	Learning_Rate	Hidden_Size	……	acc	time  预测100条耗时
+lstm	0.001	           128		        0.8741	  0.0075s
+CNN	  0.001	           100(卷积核)		   0.9100	  0.0080s
+BERT	0.00002	         768		         0.9234	  0.6698s
