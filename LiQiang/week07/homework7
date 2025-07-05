@@ -1,0 +1,196 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from transformers import BertTokenizer, BertModel
+import time
+
+# 设备配置
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f'Using device: {device}')
+
+# 模型统一超参数
+config = {
+    "hidden_size": 128,
+    "num_layers": 3,
+    "epochs": 20,
+    "batch_size": 32,
+    "learning_rate": 2e-5,
+    "num_classes": 2
+}
+
+# 加载数据
+def load_data(file_path="文本分类练习.csv", test_size=0.1):
+    df = pd.read_csv(file_path)
+    texts = df['review'].tolist()
+    labels = df['label'].astype(int).tolist()
+    return train_test_split(texts, labels, test_size=test_size, random_state=42)
+
+# 文本 Tokenization（BERT tokenizer）
+def tokenize(texts, max_len=64):
+    # 指定本地路径
+    tokenizer = BertTokenizer.from_pretrained('D:\bd\job\bert-base-chinese\bert-base-chinese')
+    encoded = tokenizer(texts, padding=True, truncation=True, max_length=max_len, return_tensors="pt")
+    return encoded['input_ids'], encoded['attention_mask']
+
+# 构建数据集
+def create_dataloaders(train_texts, train_labels, test_texts, test_labels):
+    input_ids_train, attention_mask_train = tokenize(train_texts)
+    input_ids_test, attention_mask_test = tokenize(test_texts)
+
+    train_dataset = TensorDataset(input_ids_train, attention_mask_train, torch.LongTensor(train_labels))
+    test_dataset = TensorDataset(input_ids_test, attention_mask_test, torch.LongTensor(test_labels))
+
+    train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=config["batch_size"])
+    return train_loader, test_loader
+
+# 模型定义 - BERT
+class BERTClassifier(nn.Module):
+    def __init__(self, hidden_size=128, num_classes=2):
+        super().__init__()
+        # 使用本地路径加载预训练模型
+        self.bert = BertModel.from_pretrained('D:\bd\job\bert-base-chinese\bert-base-chinese')
+        self.classifier = nn.Sequential(
+            nn.Linear(768, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, num_classes)
+        ).to(device)
+
+    def forward(self, input_ids, attention_mask):
+        # 调整这里来适应BertModel的输出格式
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        # 获取最后一层的隐藏状态
+        cls_output = outputs[0][:, 0, :]  # outputs[0] 是 last_hidden_state
+        return self.classifier(cls_output)
+
+# 模型定义 - LSTM
+class LSTMClassifier(nn.Module):
+    def __init__(self, vocab_size=21128, embed_dim=128, hidden_size=128, num_layers=3, num_classes=2):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.lstm = nn.LSTM(embed_dim, hidden_size, num_layers=num_layers, batch_first=True)
+        self.classifier = nn.Linear(hidden_size, num_classes)
+
+    def forward(self, x, attention_mask=None):  # 增加attention_mask参数，但不使用
+        x = self.embedding(x)
+        out, _ = self.lstm(x)
+        return self.classifier(out.mean(dim=1))
+
+# 模型定义 - CNN
+class CNNClassifier(nn.Module):
+    def __init__(self, vocab_size=21128, embed_dim=128, hidden_size=128, num_layers=3, num_classes=2):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.conv1 = nn.Conv1d(embed_dim, hidden_size, kernel_size=3, padding=1)
+        self.pool = nn.AdaptiveMaxPool1d(1)
+        self.classifier = nn.Linear(hidden_size, num_classes)
+
+    def forward(self, x, attention_mask=None):  # 增加attention_mask参数，但不使用
+        x = self.embedding(x).transpose(1, 2)  # [B, E, L]
+        x = self.conv1(x)
+        x = self.pool(x).squeeze(-1)
+        return self.classifier(x)
+
+# 训练函数
+def train_model(model, dataloader, criterion, optimizer):
+    model.train()
+    total_loss = 0
+    for batch in dataloader:
+        input_ids, attention_mask, labels = [t.to(device) for t in batch]
+        
+        # 根据模型类型决定是否传入attention_mask
+        if isinstance(model, BERTClassifier):
+            logits = model(input_ids, attention_mask)
+        else:
+            logits = model(input_ids)  # LSTM和CNN模型不使用attention_mask
+            
+        optimizer.zero_grad()
+        loss = criterion(logits, labels)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+    return total_loss / len(dataloader)
+
+# 测试函数（计算准确率 + 测试100条耗时）
+def evaluate_model(model, dataloader, sample_size=100):
+    model.eval()
+    correct = 0
+    total = 0
+    inference_times = []
+
+    with torch.no_grad():
+        for batch in dataloader:
+            input_ids, attention_mask, labels = [t.to(device) for t in batch]
+            
+            start_time = time.time()
+            # 根据模型类型决定是否传入attention_mask
+            if isinstance(model, BERTClassifier):
+                logits = model(input_ids, attention_mask)
+            else:
+                logits = model(input_ids)  # LSTM和CNN模型不使用attention_mask
+            end_time = time.time()
+
+            preds = torch.argmax(logits, dim=1)
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
+            inference_times.append(end_time - start_time)
+
+            if total >= sample_size:
+                break
+
+    accuracy = correct / min(total, sample_size)
+    avg_time_per_100 = sum(inference_times) / min(total, sample_size)
+    return accuracy * 100, avg_time_per_100
+
+# 主程序入口
+if __name__ == "__main__":
+    print(" 正在加载并预处理数据...")
+    train_texts, test_texts, train_labels, test_labels = load_data()
+    train_loader, test_loader = create_dataloaders(train_texts, train_labels, test_texts, test_labels)
+
+    results = {}
+
+    # BERT 模型
+    print("\n 开始训练 BERT 模型...")
+    bert_model = BERTClassifier(hidden_size=config["hidden_size"]).to(device)
+    optimizer = optim.AdamW(bert_model.parameters(), lr=config["learning_rate"])
+    criterion = nn.CrossEntropyLoss()
+
+    for epoch in range(config["epochs"]):
+        avg_loss = train_model(bert_model, train_loader, criterion, optimizer)
+        print(f"Epoch {epoch+1} | Loss: {avg_loss:.4f}")
+
+    acc, time_100 = evaluate_model(bert_model, test_loader)
+    results["BERT"] = {"acc": round(acc, 2), "time": round(time_100, 4)}
+
+    # LSTM 模型
+    print("\n 开始训练 LSTM 模型...")
+    lstm_model = LSTMClassifier(hidden_size=config["hidden_size"], num_layers=config["num_layers"]).to(device)
+    optimizer = optim.AdamW(lstm_model.parameters(), lr=config["learning_rate"])
+
+    for epoch in range(config["epochs"]):
+        avg_loss = train_model(lstm_model, train_loader, criterion, optimizer)
+        print(f"Epoch {epoch+1} | Loss: {avg_loss:.4f}")
+
+    acc, time_100 = evaluate_model(lstm_model, test_loader)
+    results["LSTM"] = {"acc": round(acc, 2), "time": round(time_100, 4)}
+
+    # CNN 模型
+    print("\n 开始训练 CNN 模型...")
+    cnn_model = CNNClassifier(hidden_size=config["hidden_size"], num_layers=config["num_layers"]).to(device)
+    optimizer = optim.AdamW(cnn_model.parameters(), lr=config["learning_rate"])
+
+    for epoch in range(config["epochs"]):
+        avg_loss = train_model(cnn_model, train_loader, criterion, optimizer)
+        print(f"Epoch {epoch+1} | Loss: {avg_loss:.4f}")
+
+    acc, time_100 = evaluate_model(cnn_model, test_loader)
+    results["CNN"] = {"acc": round(acc, 2), "time": round(time_100, 4)}
+
+    # 输出结果汇总
+    print("\n 模型对比结果：")
+    for name, res in results.items():
+        print(f"{name}: 准确率={res['acc']}%, 100条评论耗时={res['time']:.4f}s")
