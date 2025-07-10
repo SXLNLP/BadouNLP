@@ -1,0 +1,99 @@
+# -*- coding: utf-8 -*-
+
+import json
+import re
+import os
+import torch
+import numpy as np
+from torch.utils.data import Dataset, DataLoader
+from transformers import BertTokenizer
+from sklearn.model_selection import train_test_split
+
+
+class DataGenerator(Dataset):
+    def __init__(self, data, config):
+        self.config = config
+        self.data = data
+        self.label_to_index = {0: 0, 1: 1}  # 这里假设标签是0和1
+        self.config.class_num = len(self.label_to_index)  # 使用类属性而不是字典
+        if hasattr(self.config, "model_type") and self.config.model_type == "bert":
+            self.tokenizer = BertTokenizer.from_pretrained(self.config.pretrain_model_path)
+        self.vocab = load_vocab(self.config.vocab_path)
+        self.config.vocab_size = len(self.vocab)
+        self.process_data()
+
+    def process_data(self):
+        self.processed_data = []
+        for line in self.data:
+            label = self.label_to_index.get(line[0], 0)  # 默认标签为0
+            title = line[1]
+            if hasattr(self.config, "model_type") and self.config.model_type == "bert":
+                input_id = self.tokenizer.encode(title, max_length=self.config.max_length, pad_to_max_length=True)
+            else:
+                input_id = self.encode_sentence(title)
+            input_id = torch.LongTensor(input_id)
+            label_index = torch.LongTensor([label])
+            self.processed_data.append([input_id, label_index])
+
+    def encode_sentence(self, text):
+        input_id = []
+        for char in text:
+            input_id.append(self.vocab.get(char, self.vocab["[UNK]"]))
+        input_id = self.padding(input_id)
+        return input_id
+
+    def padding(self, input_id):
+        input_id = input_id[:self.config.max_length]
+        input_id += [0] * (self.config.max_length - len(input_id))
+        return input_id
+
+    def __len__(self):
+        return len(self.processed_data)
+
+    def __getitem__(self, index):
+        return self.processed_data[index]
+
+
+def load_vocab(vocab_path):
+    token_dict = {}
+    with open(vocab_path, encoding="utf8") as f:
+        for index, line in enumerate(f):
+            token = line.strip()
+            token_dict[token] = index + 1
+    return token_dict
+
+
+def load_data(data_path, config, test_size=0.1):
+    # Load data from CSV
+    data = []
+    with open(data_path, 'r', encoding='utf-8') as file:
+        for line in file:
+            if line.strip():  # Ensure the line is not empty
+                parts = line.strip().split(',')
+                if len(parts) >= 2:
+                    label = int(parts[0])
+                    review = ','.join(parts[1:])
+                    data.append([label, review])
+
+    # Split into training and validation sets
+    train_data, valid_data = train_test_split(data, test_size=test_size, random_state=42)
+
+    # Create DataGenerators for both sets
+    train_dataset = DataGenerator(train_data, config)
+    valid_dataset = DataGenerator(valid_data, config)
+
+    # Create DataLoaders
+    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.batch_size, shuffle=False)
+
+    return train_loader, valid_loader
+
+
+if __name__ == "__main__":
+    from config import Config
+
+    config = Config()
+    print(config.__dict__)  # 打印配置对象的属性，检查是否正确
+    train_loader, valid_loader = load_data("文本分类练习.csv", config, test_size=0.1)
+    print(f"Training dataset size: {len(train_loader.dataset)}")
+    print(f"Validation dataset size: {len(valid_loader.dataset)}")

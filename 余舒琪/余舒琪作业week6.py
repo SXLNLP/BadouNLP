@@ -1,0 +1,32 @@
+# 计算Bert-Base-Chinese模型的参数量
+
+import json
+
+def float_num(config_path):
+    config = json.load(open(config_path, "r", encoding="utf-8"))
+    vocab_size = config["vocab_size"]
+    hidden_size = config["hidden_size"]
+    max_position_embeddings = config["max_position_embeddings"]
+    type_vocab_size = config["type_vocab_size"]
+    intermediate_size = config["intermediate_size"]
+    num_hidden_layers = config["num_hidden_layers"]
+    # 计算Embeddings层参数量
+    embeddings_config_num = (vocab_size * hidden_size + type_vocab_size * hidden_size + max_position_embeddings * hidden_size
+                             + hidden_size + hidden_size)
+    # 计算单个Transformers层参数量
+    self_attention_config_num = hidden_size * hidden_size * 3 + hidden_size * 3 + hidden_size * hidden_size + hidden_size
+    layer_norm1_config_num = hidden_size + hidden_size
+    feed_forward_config_num = hidden_size * intermediate_size + intermediate_size + intermediate_size * hidden_size + hidden_size
+    layer_norm2_config_num = hidden_size + hidden_size
+    # 计算所有Transformers层参数量
+    output_config_num = num_hidden_layers * (self_attention_config_num + layer_norm1_config_num + feed_forward_config_num + layer_norm2_config_num)
+    # 计算Pooler层参数量
+    pooler_config_num = hidden_size * hidden_size + hidden_size
+    # BERT-Base-Chinese总参数量
+    config_num = embeddings_config_num + output_config_num + pooler_config_num
+    return config_num
+
+config_num = float_num(r"D:\学习\ai\week6\预习\bert-base-chinese\config.json")
+print(config_num) # 12层，102267648个浮点数
+print(config_num * 4) # 409070592字节
+print(config_num * 4 / (1024 ** 2)) # 390.1201171875MB

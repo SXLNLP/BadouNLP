@@ -1,0 +1,89 @@
+import math
+import re
+import json
+import jieba
+import numpy as np
+from gensim.models import Word2Vec
+from sklearn.cluster import KMeans
+from sklearn.metrics import pairwise_distances
+from collections import defaultdict
+
+# 输入模型文件路径
+# 加载训练好的模型
+def load_word2vec_model(path):
+    model = Word2Vec.load(path)
+    return model
+
+def load_sentence(path):
+    sentences = set()
+    with open(path, encoding="utf8") as f:
+        for line in f:
+            sentence = line.strip()
+            sentences.add(" ".join(jieba.cut(sentence)))
+    print("获取句子数量：", len(sentences))
+    return sentences
+
+# 将文本向量化
+def sentences_to_vectors(sentences, model):
+    vectors = []
+    for sentence in sentences:
+        words = sentence.split()  # sentence是分好词的，空格分开
+        vector = np.zeros(model.vector_size)
+        # 所有词的向量相加求平均，作为句子向量
+        for word in words:
+            try:
+                vector += model.wv[word]
+            except KeyError:
+                # 部分词在训练中未出现，用全0向量代替
+                vector += np.zeros(model.vector_size)
+        vectors.append(vector / len(words))
+    return np.array(vectors)
+
+def main():
+    model = load_word2vec_model(r"F:\Desktop\work_space\badou\八斗课程\week5 词向量及文本向量\model.w2v") # 加载词向量模型
+    sentences = list(load_sentence("titles.txt"))  # 加载所有标题并转为列表
+    vectors = sentences_to_vectors(sentences, model)   # 将所有标题向量化
+
+    n_clusters = int(math.sqrt(len(sentences)))  # 指定聚类数量
+    print("指定聚类数量：", n_clusters)
+    kmeans = KMeans(n_clusters, random_state=42)  # 定义一个kmeans计算类
+    kmeans.fit(vectors)          # 进行聚类计算
+
+    # 计算每个样本到其所属簇中心的距离
+    distances = pairwise_distances(vectors, kmeans.cluster_centers_)
+    intra_distances = distances[np.arange(len(vectors)), kmeans.labels_]  # 每个样本到其所属簇中心的距离
+
+    # 收集每个簇的信息
+    cluster_info = []
+    for label in range(n_clusters):
+        # 获取当前簇的样本索引
+        mask = kmeans.labels_ == label
+        indices = np.where(mask)[0]
+
+        # 计算当前簇的平均类内距离
+        avg_distance = np.mean(intra_distances[mask])
+
+        # 获取当前簇的句子
+        cluster_sentences = [sentences[i] for i in indices]
+
+        cluster_info.append({
+            'label': label,
+            'sentences': cluster_sentences,
+            'size': len(cluster_sentences),
+            'avg_intra_distance': avg_distance,
+            'centroid': kmeans.cluster_centers_[label]
+        })
+
+    # 按照平均类内距离排序
+    sorted_clusters = sorted(cluster_info, key=lambda x: x['avg_intra_distance'])
+
+    # 打印排序后的簇信息
+    for cluster in sorted_clusters:
+        print("\nCluster {} (平均类内距离: {:.4f}, 包含{}个句子):".format(
+            cluster['label'], cluster['avg_intra_distance'], cluster['size']))
+        for i in range(min(10, len(cluster['sentences']))):  # 最多显示10个句子
+            print(cluster['sentences'][i].replace(" ", ""))
+        print("---------")
+
+if __name__ == "__main__":
+    main()

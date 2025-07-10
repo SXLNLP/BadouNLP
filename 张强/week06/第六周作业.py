@@ -1,0 +1,37 @@
+Token_embedding_count=30522
+Segment_embedding_count=2
+Position_embedding_count=512
+embeddings_layer_norm_weight_count=1
+embeddings_layer_norm_bias_count=1
+hidden_size = 768
+q_w_count=768
+k_w_count=768
+v_w_count=768
+o_w_count=768
+q_b_count=1
+k_b_count=1
+v_b_count=1
+o_b_count=1
+attention_layer_norm_w_count=1
+attention_layer_norm_b_count=1
+num_layers = 12
+intermediate_size=3072
+ff_layer_norm_w_count=1
+ff_layer_norm_b_count=1
+pooler_dense_weight_count=768
+pooler_dense_bias_count=1
+Embeddings_weight_counts=0
+Transformer_weight_counts=0
+Pooler_weight_counts=0
+Embeddings_weight_counts=(Token_embedding_count+Segment_embedding_count+Position_embedding_count+embeddings_layer_norm_weight_count+embeddings_layer_norm_bias_count)*hidden_size
+SelfAttention_weight_counts=(q_w_count+k_w_count+v_w_count+o_w_count+q_b_count+k_b_count+v_b_count+o_b_count+attention_layer_norm_w_count+attention_layer_norm_b_count)*hidden_size
+FFN_weight_counts=hidden_size*intermediate_size+intermediate_size+intermediate_size*hidden_size+hidden_size+(ff_layer_norm_w_count+ff_layer_norm_b_count)*hidden_size
+Transformer_weight_counts=SelfAttention_weight_counts+FFN_weight_counts
+Pooler_weight_counts=pooler_dense_weight_count*hidden_size+pooler_dense_bias_count*hidden_size
+Total_weight_counts=Embeddings_weight_counts+Transformer_weight_counts*num_layers+Pooler_weight_counts
+print(Embeddings_weight_counts)
+print(SelfAttention_weight_counts)
+print(FFN_weight_counts)
+print(Transformer_weight_counts)
+print(Pooler_weight_counts)
+print(Total_weight_counts)

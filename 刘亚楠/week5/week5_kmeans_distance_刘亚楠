@@ -1,0 +1,100 @@
+#!/usr/bin/env python3  
+#coding: utf-8
+
+#基于训练好的词向量模型进行聚类
+#聚类采用Kmeans算法
+import math
+import re
+import json
+import jieba
+import numpy as np
+from gensim.models import Word2Vec
+from sklearn.cluster import KMeans
+from collections import defaultdict
+
+#输入模型文件路径
+#加载训练好的模型
+def load_word2vec_model(path):
+    model = Word2Vec.load(path)
+    return model
+
+def load_sentence(path):
+    sentences = set()
+    with open(path, encoding="utf8") as f:
+        for line in f:
+            sentence = line.strip()
+            sentences.add(" ".join(jieba.cut(sentence)))
+    print("获取句子数量：", len(sentences))
+    return sentences
+
+#将文本向量化
+def sentences_to_vectors(sentences, model):
+    vectors = []
+    for sentence in sentences:
+        words = sentence.split()  #sentence是分好词的，空格分开
+        vector = np.zeros(model.vector_size)
+        #所有词的向量相加求平均，作为句子向量
+        for word in words:
+            try:
+                vector += model.wv[word]
+            except KeyError:
+                #部分词在训练中未出现，用全0向量代替
+                vector += np.zeros(model.vector_size)
+        vectors.append(vector / len(words))
+    return np.array(vectors)
+
+
+def main():
+    model = load_word2vec_model(r"/Users/nlp/week5/week5 词向量及文本向量/model.w2v") #加载词向量模型
+    sentences = load_sentence("titles.txt")  #加载所有标题
+    vectors = sentences_to_vectors(sentences, model)   #将所有标题向量化
+
+    n_clusters = int(math.sqrt(len(sentences)))  #指定聚类数量
+    print("指定聚类数量：", n_clusters)
+    kmeans = KMeans(n_clusters)  #定义一个kmeans计算类
+    kmeans.fit(vectors)          #进行聚类计算
+
+    sentence_label_dict = defaultdict(list) # key:label；value：sentence列表
+    sentence_label_distance_dict = defaultdict(list) # key:label；value：各个sentence到所在簇质心的距离
+    for vector,sentence, label in zip(vectors,sentences, kmeans.labels_):  #取出句子和标签
+        sentence_label_dict[label].append(sentence)         #同标签的放到一起
+        #print(sentence,kmeans.labels_,kmeans.cluster_centers_) # kmeans.labels_是每个样本对应的簇标签，cluster_centers_是各个质心的向量，第X个就是第X类簇质心
+        cluster_vector = kmeans.cluster_centers_[label] # sentence对应簇质心向量
+        distance = np.linalg.norm(vector - cluster_vector) # 计算当前vector到质心的欧式距离
+        sentence_label_distance_dict[label].append(distance)
+
+    # 查看各个簇的句子
+    for label, sentences in sentence_label_dict.items():
+        print("cluster %s :" % label)
+        for i in range(min(10, len(sentences))):  #随便打印几个，太多了看不过来
+            print(sentences[i].replace(" ", ""))
+        print("---------")
+    # 按照簇内到质心的平均距离对簇进行排序，打印出距离最大的前五个簇和距离最小的前五个簇
+    sentence_label_mean_distance_dict =defaultdict(dict)
+    for label,distances in sentence_label_distance_dict.items():
+        mean_distance = np.mean(distances)
+        sentence_label_mean_distance_dict[label] = mean_distance
+
+    sentence_label_mean_distance_dict = sorted(sentence_label_mean_distance_dict.items(),key = lambda x :x[1],reverse=True)
+    print(sentence_label_mean_distance_dict)
+    # 查看距离最大的前五个簇
+    for item in sentence_label_mean_distance_dict[:5]:
+        label = item[0]
+        mean_distance = item[1]
+        print("----距离最大的簇 %d, 距离是 %f " % (label,mean_distance))
+        for sentence in sentence_label_dict[label][:5]:
+            print(sentence.replace(" ", ""))
+    print("---------")
+    # 查看距离最小的前小个簇
+    for item in sentence_label_mean_distance_dict[-5:]:
+        label = item[0]
+        mean_distance = item[1]
+        print("----距离最小的簇 %d, 距离是 %f " % (label,mean_distance))
+        for sentence in sentence_label_dict[label][:5]:
+            print(sentence.replace(" ", ""))
+
+
+
+if __name__ == "__main__":
+    main()
+

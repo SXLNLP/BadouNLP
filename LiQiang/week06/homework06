@@ -1,0 +1,139 @@
+import torch
+from transformers import BertModel
+
+
+def count_parameters(model):
+    """计算模型的总参数量和可训练参数量"""
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    return total_params, trainable_params
+
+
+def analyze_bert_params(model):
+   
+    state_dict = model.state_dict()
+    params = {}
+
+    # Embedding层参数
+    params['word_embeddings'] = state_dict['embeddings.word_embeddings.weight'].numel()
+    params['position_embeddings'] = state_dict['embeddings.position_embeddings.weight'].numel()
+    params['token_type_embeddings'] = state_dict['embeddings.token_type_embeddings.weight'].numel()
+    params['embedding_layer_norm'] = (
+            state_dict['embeddings.LayerNorm.weight'].numel() +
+            state_dict['embeddings.LayerNorm.bias'].numel()
+    )
+    params['total_embedding'] = sum(params[k] for k in ['word_embeddings', 'position_embeddings',
+                                                        'token_type_embeddings', 'embedding_layer_norm'])
+
+    # Transformer层参数 (单一层)
+    layer_prefix = 'encoder.layer.0.'
+    # 注意力机制参数
+    attn_prefix = layer_prefix + 'attention.self.'
+    params['attn_query'] = (
+            state_dict[attn_prefix + 'query.weight'].numel() +
+            state_dict[attn_prefix + 'query.bias'].numel()
+    )
+    params['attn_key'] = (
+            state_dict[attn_prefix + 'key.weight'].numel() +
+            state_dict[attn_prefix + 'key.bias'].numel()
+    )
+    params['attn_value'] = (
+            state_dict[attn_prefix + 'value.weight'].numel() +
+            state_dict[attn_prefix + 'value.bias'].numel()
+    )
+    params['attn_output'] = (
+            state_dict[layer_prefix + 'attention.output.dense.weight'].numel() +
+            state_dict[layer_prefix + 'attention.output.dense.bias'].numel()
+    )
+    params['attn_layer_norm'] = (
+            state_dict[layer_prefix + 'attention.output.LayerNorm.weight'].numel() +
+            state_dict[layer_prefix + 'attention.output.LayerNorm.bias'].numel()
+    )
+    params['total_attention'] = sum(params[k] for k in ['attn_query', 'attn_key', 'attn_value',
+                                                        'attn_output', 'attn_layer_norm'])
+
+    # 前馈网络参数
+    params['intermediate'] = (
+            state_dict[layer_prefix + 'intermediate.dense.weight'].numel() +
+            state_dict[layer_prefix + 'intermediate.dense.bias'].numel()
+    )
+    params['output'] = (
+            state_dict[layer_prefix + 'output.dense.weight'].numel() +
+            state_dict[layer_prefix + 'output.dense.bias'].numel()
+    )
+    params['ffn_layer_norm'] = (
+            state_dict[layer_prefix + 'output.LayerNorm.weight'].numel() +
+            state_dict[layer_prefix + 'output.LayerNorm.bias'].numel()
+    )
+    params['total_ffn'] = params['intermediate'] + params['output'] + params['ffn_layer_norm']
+
+    # 单层Transformer总参数
+    params['per_layer'] = params['total_attention'] + params['total_ffn']
+
+    # 所有Transformer层总参数
+    num_layers = model.config.num_hidden_layers
+    params['total_transformer'] = params['per_layer'] * num_layers
+
+    # Pooler层参数
+    params['pooler'] = (
+            state_dict['pooler.dense.weight'].numel() +
+            state_dict['pooler.dense.bias'].numel()
+    )
+
+    # 模型总参数量
+    params['total'] = params['total_embedding'] + params['total_transformer'] + params['pooler']
+
+    return params
+
+
+def print_param_analysis(params, model_config):
+ 
+    print(f"--- BERT参数量分析 ---")
+    print(f"模型配置: {model_config.model_type}-{model_config.hidden_size}x{model_config.num_hidden_layers}")
+    print(f"词汇表大小: {model_config.vocab_size}, 最大位置编码: {model_config.max_position_embeddings}")
+    print("\n组件参数量:")
+    print(f"  Embedding层:")
+    print(f"    词嵌入: {params['word_embeddings']:,}")
+    print(f"    位置嵌入: {params['position_embeddings']:,}")
+    print(f"    类型嵌入: {params['token_type_embeddings']:,}")
+    print(f"    LayerNorm: {params['embedding_layer_norm']:,}")
+    print(f"    小计: {params['total_embedding']:,}")
+
+    print(f"\n  单层Transformer:")
+    print(f"    注意力机制:")
+    print(f"      Query: {params['attn_query']:,}")
+    print(f"      Key: {params['attn_key']:,}")
+    print(f"      Value: {params['attn_value']:,}")
+    print(f"      输出投影: {params['attn_output']:,}")
+    print(f"      LayerNorm: {params['attn_layer_norm']:,}")
+    print(f"      小计: {params['total_attention']:,}")
+
+    print(f"    前馈网络:")
+    print(f"      中间层: {params['intermediate']:,}")
+    print(f"      输出层: {params['output']:,}")
+    print(f"      LayerNorm: {params['ffn_layer_norm']:,}")
+    print(f"      小计: {params['total_ffn']:,}")
+
+    print(f"    单层总参数: {params['per_layer']:,}")
+    print(f"  {model_config.num_hidden_layers}层Transformer总参数: {params['total_transformer']:,}")
+
+    print(f"\n  Pooler层: {params['pooler']:,}")
+    print(f"\n模型总参数量: {params['total']:,} ({params['total'] / 1e6:.2f}M)")
+
+
+if __name__ == "__main__":
+    model_name = "bert-base-chinese"
+    try:
+        bert = BertModel.from_pretrained(model_name)
+    except:
+        print(f"无法加载模型 {model_name}，请确保模型路径正确或网络连接正常")
+        exit(1)
+
+    # 计算总参数量
+    total_params, trainable_params = count_parameters(bert)
+    print(f"模型总参数量: {total_params:,} ({total_params / 1e6:.2f}M)")
+    print(f"可训练参数量: {trainable_params:,} ({trainable_params / 1e6:.2f}M)")
+
+    # 分析各组件参数量
+    params = analyze_bert_params(bert)
+    print_param_analysis(params, bert.config)

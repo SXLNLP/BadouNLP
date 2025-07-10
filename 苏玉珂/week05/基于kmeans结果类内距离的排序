@@ -1,0 +1,100 @@
+import numpy as np
+import random
+import sys
+
+
+class KMeansClusterer:
+    def __init__(self, ndarray, cluster_num):
+        self.ndarray = ndarray
+        self.cluster_num = cluster_num
+        self.points = self.__pick_start_point(ndarray, cluster_num)
+
+    def cluster(self):
+        result = []
+        for i in range(self.cluster_num):
+            result.append([])
+        for item in self.ndarray:
+            distance_min = sys.maxsize
+            index = -1
+            for i in range(len(self.points)):
+                distance = self.__distance(item, self.points[i])
+                if distance < distance_min:
+                    distance_min = distance
+                    index = i
+            result[index] = result[index] + [item.tolist()]
+        new_center = []
+        for item in result:
+            new_center.append(self.__center(item).tolist())
+        if (self.points == new_center).all():
+            sum = self.__sumdis(result)
+            return result, self.points, sum
+        self.points = np.array(new_center)
+        return self.cluster()
+
+    def cluster_with_sorted_intra_distance(self):
+        # 先进行常规聚类
+        result, centers, total_distance = self.cluster()
+
+        # 计算每个簇的类内平均距离
+        intra_distances = []
+        for i in range(len(result)):
+            if len(result[i]) > 0:
+                distances = [self.__distance(p, centers[i]) for p in result[i]]
+                avg_distance = np.mean(distances)
+            else:
+                avg_distance = 0
+            intra_distances.append(avg_distance)
+
+        # 获取排序索引(从大到小)
+        sorted_indices = np.argsort(intra_distances)[::-1]
+
+        # 根据排序索引重新组织结果
+        sorted_result = [result[i] for i in sorted_indices]
+        sorted_centers = [centers[i] for i in sorted_indices]
+        sorted_distances = [intra_distances[i] for i in sorted_indices]
+
+        return sorted_result, sorted_centers, sorted_distances, total_distance
+
+    def __sumdis(self, result):
+        sum = 0
+        for i in range(len(self.points)):
+            for j in range(len(result[i])):
+                sum += self.__distance(result[i][j], self.points[i])
+        return sum
+
+    def __center(self, list):
+        return np.array(list).mean(axis=0)
+
+    def __distance(self, p1, p2):
+        tmp = 0
+        for i in range(len(p1)):
+            tmp += pow(p1[i] - p2[i], 2)
+        return pow(tmp, 0.5)
+
+    def __pick_start_point(self, ndarray, cluster_num):
+        if cluster_num < 0 or cluster_num > ndarray.shape[0]:
+            raise Exception("簇数设置有误")
+        indexes = random.sample(np.arange(0, ndarray.shape[0], step=1).tolist(), cluster_num)
+        points = []
+        for index in indexes:
+            points.append(ndarray[index].tolist())
+        return np.array(points)
+
+
+if __name__ == "__main__":
+    # 生成随机数据
+    np.random.seed(42)
+    x = np.random.rand(100, 8)
+
+    # 创建聚类器
+    kmeans = KMeansClusterer(x, 10)
+
+    # 执行聚类并获取排序后的结果
+    sorted_result, sorted_centers, sorted_distances, total_distance = kmeans.cluster_with_sorted_intra_distance()
+
+    # 打印结果
+    print("按类内距离排序后的结果(从大到小):")
+    for i, (center, dist) in enumerate(zip(sorted_centers, sorted_distances)):
+        print(f"簇{i}: 中心点={center}, 平均类内距离={dist:.4f}, 样本数={len(sorted_result[i])}")
+
+    print(f"\n总距离和: {total_distance:.4f}")
