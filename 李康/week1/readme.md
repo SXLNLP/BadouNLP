@@ -1,0 +1,71 @@
+# 环境搭建
+
+```yaml
+name: ai_learning
+channels:
+  - defaults
+dependencies:
+  - bzip2=1.0.8=h2bbff1b_6
+  - ca-certificates=2025.2.25=haa95532_0
+  - expat=2.6.4=h8ddb27b_0
+  - libffi=3.4.4=hd77b12b_1
+  - openssl=3.0.16=h3f729d1_0
+  - pip=25.0=py312haa95532_0
+  - python=3.12.9=h14ffc60_0
+  - setuptools=75.8.0=py312haa95532_0
+  - sqlite=3.45.3=h2bbff1b_0
+  - tk=8.6.14=h0416ee5_0
+  - vc=14.42=haa95532_4
+  - vs2015_runtime=14.42.34433=he0abc0d_4
+  - wheel=0.45.1=py312haa95532_0
+  - xz=5.6.4=h4754444_1
+  - zlib=1.2.13=h8cc25b3_1
+  - pip:
+    - accelerate==1.5.2
+    - certifi==2025.1.31
+    - charset-normalizer==3.4.1
+    - colorama==0.4.6
+    - contourpy==1.3.1
+    - cycler==0.12.1
+    - filelock==3.18.0
+    - fonttools==4.56.0
+    - fsspec==2025.3.0
+    - gensim==4.3.3
+    - huggingface-hub==0.29.3
+    - idna==3.10
+    - jinja2==3.1.6
+    - joblib==1.4.2
+    - kiwisolver==1.4.8
+    - markupsafe==3.0.2
+    - matplotlib==3.9.2
+    - mpmath==1.3.0
+    - networkx==3.4.2
+    - numpy==1.26.4
+    - packaging==24.2
+    - pandas==2.2.2
+    - peft==0.12.0
+    - pillow==11.1.0
+    - psutil==7.0.0
+    - pyparsing==3.2.1
+    - python-dateutil==2.9.0.post0
+    - pytz==2025.1
+    - pyyaml==6.0.2
+    - regex==2024.11.6
+    - requests==2.32.3
+    - safetensors==0.5.3
+    - scikit-learn==1.4.2
+    - scipy==1.13.1
+    - six==1.17.0
+    - smart-open==7.1.0
+    - sympy==1.13.3
+    - threadpoolctl==3.6.0
+    - tokenizers==0.21.1
+    - torch==2.4.1
+    - tqdm==4.67.1
+    - transformers==4.49.0
+    - typing-extensions==4.12.2
+    - tzdata==2025.1
+    - urllib3==2.3.0
+    - wrapt==1.17.2
+prefix: G:\anaconda\envs\ai_learning
+```

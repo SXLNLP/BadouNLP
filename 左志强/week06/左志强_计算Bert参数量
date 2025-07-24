@@ -1,0 +1,59 @@
+from transformers import BertModel, BertConfig
+
+# 加载BERT模型
+model = BertModel.from_pretrained("bert-base-chinese")
+
+def count_parameters(model):
+    """准确计算模型总参数量（考虑共享参数）"""
+    total_params = 0
+    seen = set()  # 跟踪已计算的参数
+    
+    for name, param in model.named_parameters():
+        # 跳过已计算的共享参数
+        if param in seen:
+            continue
+            
+        seen.add(param)
+        total_params += param.numel()
+    
+    return total_params
+
+def print_layer_parameters(model):
+    """分层打印参数量（避免重复计数）"""
+    total = 0
+    seen = set()
+    
+    print("{:<50} {:<15} {:<10}".format("Layer", "Parameters", "Shape"))
+    print("-" * 80)
+    
+    for name, param in model.named_parameters():
+        if param in seen:
+            continue
+            
+        seen.add(param)
+        params = param.numel()
+        total += params
+        print("{:<50} {:<15,} {}".format(name, params, tuple(param.shape)))
+    
+    print("-" * 80)
+    print("{:<50} {:<15,}".format("TOTAL PARAMETERS", total))
+    return total
+
+# 获取模型配置
+config = BertConfig.from_pretrained("bert-base-chinese")
+print(f"Model: bert-base-chinese")
+print(f"Hidden size: {config.hidden_size}")
+print(f"Intermediate size: {config.intermediate_size}")
+print(f"Num layers: {config.num_hidden_layers}")
+print(f"Vocab size: {config.vocab_size}")
+
+# 计算总参数量
+total_params = count_parameters(model)
+print(f"\nTotal Parameters: {total_params:,}")
+
+# 分层打印参数量
+print("\nDetailed Parameter Count (excluding shared parameters):")
+print_layer_parameters(model)
+
+# 验证参数数量
+print(f"\nOfficial Parameter Count: {config.num_parameters():,}")

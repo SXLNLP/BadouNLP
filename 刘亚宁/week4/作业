@@ -1,0 +1,28 @@
+def sentence_cut(string, word_dict):
+    def backtrack(start, path):
+        if start == len(string):
+            result.append(path)
+            return
+        for i in range(max_len):
+            word = string[start:start + i + 1]
+            if word in word_dict:
+                backtrack(start + i + 1, path + [word])
+    max_len = 0
+    for key in word_dict.keys():
+        if len(key) > max_len:
+            max_len = len(key)
+    result = []
+    backtrack(0, [])
+    frequency = 0
+    max_frequency = 0
+    max_sentence = []
+    for current_cut in result:
+        for key in current_cut:
+            frequency += Dict[key]
+            if frequency > max_frequency:
+                max_frequency = frequency
+                max_sentence = current_cut
+    return max_frequency,max_sentence
+    
+fre_res,sen_res = sentence_cut(sentence,Dict)
+print(f"{fre_res:.3f}",sen_res)

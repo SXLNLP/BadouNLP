@@ -1,0 +1,140 @@
+import torch
+import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
+from torch.utils.data import TensorDataset, DataLoader
+
+class VectorClassifier(nn.Module):
+    def __init__(self, input_size):
+        super().__init__()
+        self.linear = nn.Linear(input_size, 5)  # 5个输出对应5个类别
+    
+    def forward(self, x, y=None):
+        y_pred = self.linear(x)
+        if y is not None:
+            return nn.functional.cross_entropy(y_pred, y)
+        return y_pred
+
+def build_dataset(num_samples):
+    """生成数据集"""
+    X = np.random.random((num_samples, 5))  # 一次性生成所有样本
+    Y = np.argmax(X, axis=1)  # 一次性计算所有标签
+    return torch.tensor(X, dtype=torch.float32), torch.tensor(Y, dtype=torch.long)
+
+def evaluate(model, data_loader):
+    """评估模型性能"""
+    model.eval()
+    correct, total = 0, 0
+    
+    with torch.no_grad():
+        for x, y in data_loader:
+            outputs = model(x)
+            _, predicted = torch.max(outputs, 1)
+            total += y.size(0)
+            correct += (predicted == y).sum().item()
+    
+    accuracy = correct / total
+    print(f"正确预测: {correct}/{total}, 准确率: {accuracy:.4f}")
+    return accuracy
+
+def train_model():
+    # 配置参数
+    epochs = 20
+    batch_size = 30
+    train_size = 5000
+    val_size = 100
+    input_size = 5
+    learning_rate = 0.001
+    
+    # 创建数据集
+    train_x, train_y = build_dataset(train_size)
+    val_x, val_y = build_dataset(val_size)
+    
+    # 创建数据加载器
+    train_loader = DataLoader(TensorDataset(train_x, train_y), 
+                             batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(TensorDataset(val_x, val_y), 
+                           batch_size=batch_size, shuffle=False)
+    
+    # 初始化模型和优化器
+    model = VectorClassifier(input_size)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    
+    # 训练日志
+    train_losses = []
+    val_accuracies = []
+    
+    # 训练循环
+    for epoch in range(epochs):
+        model.train()
+        epoch_losses = []
+        
+        for x, y in train_loader:
+            optimizer.zero_grad()
+            loss = model(x, y)
+            loss.backward()
+            optimizer.step()
+            epoch_losses.append(loss.item())
+        
+        # 计算平均损失
+        avg_loss = np.mean(epoch_losses)
+        train_losses.append(avg_loss)
+        
+        # 验证评估
+        val_acc = evaluate(model, val_loader)
+        val_accuracies.append(val_acc)
+        
+        print(f"Epoch {epoch+1}/{epochs} - Loss: {avg_loss:.4f}, Val Acc: {val_acc:.4f}")
+    
+    # 保存模型
+    torch.save(model.state_dict(), "vector_classifier.pt")
+    
+    # 绘制训练曲线
+    plt.figure(figsize=(10, 4))
+    plt.subplot(1, 2, 1)
+    plt.plot(train_losses, 'o-')
+    plt.title('Training Loss')
+    plt.xlabel('Epoch')
+    
+    plt.subplot(1, 2, 2)
+    plt.plot(val_accuracies, 'o-')
+    plt.title('Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylim(0, 1.0)
+    
+    plt.tight_layout()
+    plt.savefig('training_metrics.png')
+    plt.show()
+    
+    return model
+
+def predict(model, input_vecs):
+    """使用模型进行预测"""
+    model.eval()
+    input_tensor = torch.tensor(input_vecs, dtype=torch.float32)
+    
+    with torch.no_grad():
+        outputs = model(input_tensor)
+        probabilities = torch.softmax(outputs, dim=1)
+        predictions = torch.argmax(probabilities, dim=1)
+    
+    print("\n预测结果:")
+    for i, vec in enumerate(input_vecs):
+        pred_idx = predictions[i].item()
+        pred_prob = probabilities[i, pred_idx].item()
+        print(f"输入: {np.array(vec).round(4)} -> 预测索引: {pred_idx} (概率: {pred_prob:.4f})")
+
+if __name__ == "__main__":
+    # 训练模型
+    model = train_model()
+    
+    # 测试向量
+    test_vectors = [
+        [0.47889086, 0.15229675, 0.31082123, 0.03504317, 0.18920843],
+        [0.4963533, 0.5524256, 0.95758807, 0.65520434, 0.84890681],
+        [0.48797868, 0.67482528, 0.13625847, 0.34675372, 0.09871392],
+        [0.49349776, 0.59416669, 0.92579291, 0.41567412, 0.7358894]
+    ]
+    
+    # 进行预测
+    predict(model, test_vectors)

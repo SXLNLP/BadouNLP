@@ -1,0 +1,4 @@
+Model,Learning_Rate,Hidden_Size,acc,time(预测100条耗时)
+BERT+DNN,3e-05,256,0.8932,1.42s
+BERT+CNN,3e-05,256,0.9016,1.38s
+BERT+RNN,3e-05,256,0.8982,1.53s

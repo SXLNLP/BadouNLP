@@ -1,0 +1,163 @@
+import torch
+import torch.nn as nn
+import numpy as np
+from collections import Counter
+from torch.utils.data import Dataset, DataLoader, TensorDataset
+
+# 参数配置
+L = 10  # 字符串长度
+alphabet = ['a','b','c','d','e']  # 字符集
+num_chars = len(alphabet)
+num_classes = L + 1  # 类别数 (0-9 + 无'a'的10)
+
+# 生成数据集
+def generate_data(num_samples):
+    X_str = []
+    y = []
+    
+    for _ in range(num_samples):
+        # 随机生成字符串
+        chars = np.random.choice(alphabet, size=L)
+        s = ''.join(chars)
+        X_str.append(s)
+        
+        # 找到第一个'a'的位置
+        try:
+            pos = s.index('a')
+        except ValueError:
+            pos = L  # 没有'a'
+        y.append(pos)
+    
+    return X_str, np.array(y)
+
+# 字符串转One-hot编码
+def string_to_onehot(s):
+    char_to_idx = {ch: i for i, ch in enumerate(alphabet)}
+    one_hot = np.zeros((L, num_chars))
+    for i, char in enumerate(s):
+        if i < L:
+            one_hot[i, char_to_idx[char]] = 1
+    return one_hot
+
+# 生成并预处理数据
+num_samples = 20000
+X_str, y = generate_data(num_samples)
+
+# 转换为One-hot
+X = np.array([string_to_onehot(s) for s in X_str])
+
+# 划分数据集
+train_size = int(0.8 * num_samples)
+X_train, X_val = X[:train_size], X[train_size:]
+y_train, y_val = y[:train_size], y[train_size:]
+
+# 创建DataLoader
+train_dataset = TensorDataset(
+    torch.tensor(X_train, dtype=torch.float32),
+    torch.tensor(y_train, dtype=torch.long)
+)
+
+val_dataset = TensorDataset(
+    torch.tensor(X_val, dtype=torch.float32),
+    torch.tensor(y_val, dtype=torch.long)
+)
+
+batch_size = 64
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size)
+
+# 计算类别权重（处理不平衡数据）
+class_counts = Counter(y_train)
+class_weights = torch.tensor([
+    1.0 / class_counts[i] for i in range(num_classes)
+], dtype=torch.float32)
+class_weights = class_weights / class_weights.sum()
+
+# 定义LSTM模型
+class PositionPredictor(nn.Module):
+    def __init__(self, input_size, hidden_size, num_classes):
+        super().__init__()
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            batch_first=True,
+            bidirectional=False
+        )
+        self.fc = nn.Linear(hidden_size, num_classes)
+    
+    def forward(self, x):
+        # x形状: (batch, seq_len, input_size)
+        lstm_out, _ = self.lstm(x)  # 输出形状: (batch, seq_len, hidden_size)
+        
+        # 取序列最后一个时间步的输出
+        last_output = lstm_out[:, -1, :]
+        return self.fc(last_output)
+
+# 初始化模型
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model = PositionPredictor(
+    input_size=num_chars,
+    hidden_size=64,
+    num_classes=num_classes
+).to(device)
+
+# 损失函数和优化器
+criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+# 训练循环
+num_epochs = 15
+for epoch in range(num_epochs):
+    model.train()
+    total_loss = 0
+    
+    for inputs, labels in train_loader:
+        inputs, labels = inputs.to(device), labels.to(device)
+        
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        
+        total_loss += loss.item()
+    
+    # 验证
+    model.eval()
+    correct = 0
+    total = 0
+    
+    with torch.no_grad():
+        for inputs, labels in val_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = model(inputs)
+            _, predicted = torch.max(outputs, 1)
+            correct += (predicted == labels).sum().item()
+            total += labels.size(0)
+    
+    accuracy = 100 * correct / total
+    print(f'Epoch [{epoch+1}/{num_epochs}] Loss: {total_loss/len(train_loader):.4f} Val Acc: {accuracy:.2f}%')
+
+# 测试单个样本
+def test_single_sample(model, device):
+    s = ''.join(np.random.choice(alphabet, L))
+    print(f"\nTest String: '{s}'")
+    
+    # 预处理
+    onehot = string_to_onehot(s)
+    input_tensor = torch.tensor(onehot, dtype=torch.float32).unsqueeze(0).to(device)
+    
+    # 预测
+    model.eval()
+    with torch.no_grad():
+        output = model(input_tensor)
+        _, predicted = torch.max(output, 1)
+        pos = predicted.item()
+    
+    # 解析结果
+    true_pos = s.index('a') if 'a' in s else L
+    print(f"True Position: {true_pos if true_pos < L else 'Not found'}")
+    print(f"Predicted Position: {pos if pos < L else 'Not found'}")
+
+# 运行测试
+test_single_sample(model, device)

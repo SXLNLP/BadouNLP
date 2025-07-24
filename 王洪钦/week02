@@ -1,0 +1,85 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import random
+import torch.optim as optim
+import matplotlib as plot
+
+class TorchModel(nn.Module):
+    def __init__(self,input_size,class_num):
+        super().__init__()
+        self.linear = nn.Linear(input_size,class_num)
+        self.loss = nn.functional.cross_entropy
+    def forward(self, x, y = None):
+        x = self.linear(x)
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        if y is not None:
+            return self.loss(x, y)
+        else:
+            return torch.softmax(x, 1)
+def build_sample():
+    x = np.random.random(5)
+    y = np.argmax(x)
+    return x,y
+def build_dataset(total_sample_num):
+    X = []
+    Y = []
+    for i in range(total_sample_num):
+        x, y = build_sample()
+        X.append(x)
+        Y.append(y)
+    return torch.FloatTensor(X), torch.LongTensor(Y)
+def evaluate(model):
+    model.eval()
+    test_sample_num = 100
+    x, y = build_dataset(test_sample_num)
+    class_distribution = np.bincount(y.numpy())
+    print(f'各类别样本数量分布为：{class_distribution}')
+    correct,wrong = 0, 0
+    with torch.no_grad():
+        y_pred = model(x)
+        y_pred_class = torch.argmax(y_pred,1)
+        for y_p, y_t in zip(y_pred_class,y):
+            if y_t == y_p:
+                correct += 1
+            else:
+                wrong += 1
+        print(f'正确样本数为：{correct},错误样本数为：{wrong},正确率为{correct/(correct+wrong)}')
+    return correct/(correct+wrong)
+def main():
+    epoch_num = 30
+    input_size = 5
+    class_num = 5
+    train_sample = 1000
+    batch_size = 20
+    learning_rate = 0.001
+    model = TorchModel(input_size,class_num)
+    optim = torch.optim.Adam(model.parameters(),lr=learning_rate)
+    train_x, train_y = build_dataset(train_sample)
+    for epoch in range(epoch_num):
+        model.train()
+        watch_loss = []
+        for batch_index in range(train_sample//batch_size):
+            x = train_x[batch_index * batch_size : (batch_index+1) * batch_size]
+            y = train_y[batch_index * batch_size : (batch_index+1) * batch_size]
+            loss = model(x,y)
+            loss.backward()
+            optim.step()
+            optim.zero_grad()
+            watch_loss.append(loss.item())
+        acc = evaluate(model)
+        print(f'第{epoch+1}轮，平均loss{np.mean(watch_loss)},准确率{acc:.4f}')
+    return model
+def predict(model,input_data):
+    model.eval()
+    input_data = torch.FloatTensor(input_data)
+    with torch.no_grad():
+        y_pred = model(input_data)
+        y_pred_class = torch.argmax(y_pred,1)
+    return f'输入向量为：{input_data}，预测类别为：{y_pred_class.numpy()}'
+if __name__ =="__main__":
+    model = main()
+    test_data = np.array([0.1, 0.3, 0.9, 0.5, 0.4])
+    result = predict(model,test_data)
+    print(result)

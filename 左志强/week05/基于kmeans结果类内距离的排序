@@ -1,0 +1,79 @@
+import math
+import re
+import json
+import jieba
+import numpy as np
+from gensim.models import Word2Vec
+from sklearn.cluster import KMeans
+from collections import defaultdict
+from sklearn.metrics.pairwise import euclidean_distances
+
+#输入模型文件路径
+#加载训练好的模型
+def load_word2vec_model(path):
+    model = Word2Vec.load(path)
+    return model
+
+def load_sentence(path):
+    sentences = set()
+    with open(path, encoding="utf8") as f:
+        for line in f:
+            sentence = line.strip()
+            sentences.add(" ".join(jieba.cut(sentence)))
+    print("获取句子数量：", len(sentences))
+    return sentences
+
+#将文本向量化
+def sentences_to_vectors(sentences, model):
+    vectors = []
+    for sentence in sentences:
+        words = sentence.split()  #sentence是分好词的，空格分开
+        vector = np.zeros(model.vector_size)
+        #所有词的向量相加求平均，作为句子向量
+        for word in words:
+            try:
+                vector += model.wv[word]
+            except KeyError:
+                #部分词在训练中未出现，用全0向量代替
+                vector += np.zeros(model.vector_size)
+        vectors.append(vector / len(words))
+    return np.array(vectors)
+
+
+def main():
+    model = load_word2vec_model("model.w2v") #加载词向量模型
+    sentences = load_sentence("titles.txt")  #加载所有标题
+    sentences_list = list(sentences)  # 转换为列表以保持顺序
+    vectors = sentences_to_vectors(sentences_list, model)   #将所有标题向量化
+
+    n_clusters = int(math.sqrt(len(sentences_list)))  #指定聚类数量
+    print("指定聚类数量：", n_clusters)
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)  #定义一个kmeans计算类
+    kmeans.fit(vectors)          #进行聚类计算
+    
+    # 获取每个簇的中心点
+    cluster_centers = kmeans.cluster_centers_
+    
+    # 计算每个句子到其所属簇中心的距离
+    distances = euclidean_distances(vectors, cluster_centers)
+    # 获取每个句子到其簇中心的距离
+    sentence_distances = distances[np.arange(len(vectors)), kmeans.labels_]
+    
+    # 创建字典存储每个簇的句子和距离
+    cluster_sentences = defaultdict(list)
+    for idx, (sentence, label) in enumerate(zip(sentences_list, kmeans.labels_)):
+        cluster_sentences[label].append((sentence, sentence_distances[idx]))
+    
+    # 对每个簇内的句子按距离排序（从小到大）
+    for label in cluster_sentences:
+        cluster_sentences[label].sort(key=lambda x: x[1])
+    
+    # 输出排序后的结果
+    for label, items in cluster_sentences.items():
+        print(f"cluster {label} (共{len(items)}个句子):")
+        for i, (sentence, distance) in enumerate(items[:10]):  # 输出距离最小的10个句子
+            print(f"{i+1}. {sentence.replace(' ', '')} (距离: {distance:.4f})")
+        print("---------")
+
+if __name__ == "__main__":
+    main()

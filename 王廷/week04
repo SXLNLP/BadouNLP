@@ -1,0 +1,70 @@
+Dict = {"经常":0.1,
+        "经":0.05,
+        "有":0.1,
+        "常":0.001,
+        "有意见":0.1,
+        "歧":0.001,
+        "意见":0.2,
+        "分歧":0.2,
+        "见":0.05,
+        "意":0.05,
+        "见分歧":0.05,
+        "分":0.1}
+
+sentence = "常经有意见分歧"
+
+def bidirectional_max_match(sentence, Dict):
+    """扩展版双向最大匹配，生成所有切分路径"""
+    # 正向最大匹配所有路径
+    forward_results = []
+    forward_cut_all(sentence, Dict, [], forward_results)
+    
+    # 反向最大匹配所有路径
+    reverse_results = []
+    reverse_cut_all(sentence, Dict, [], reverse_results)
+    
+    # 合并并去重
+    all_results = forward_results + reverse_results
+    unique_results = []
+    seen = set()
+    
+    for res in all_results:
+        key = tuple(res)
+        if key not in seen:
+            seen.add(key)
+            unique_results.append(res)
+            
+    return unique_results
+
+def forward_cut_all(sentence, Dict, path, results):
+    """生成所有正向最大匹配路径"""
+    if not sentence:
+        results.append(path)
+        return
+    
+    # 尝试所有可能的匹配
+    for i in range(1, len(sentence)+1):
+        word = sentence[:i]
+        if word in Dict:
+            # 继续切分剩余部分
+            forward_cut_all(sentence[i:], Dict, path + [word], results)
+
+def reverse_cut_all(sentence, Dict, path, results):
+    """生成所有反向最大匹配路径"""
+    if not sentence:
+        results.append(path)
+        return
+    
+    # 尝试所有可能的匹配（从右向左）
+    for i in range(len(sentence), 0, -1):
+        word = sentence[len(sentence)-i:]
+        if word in Dict:
+            # 继续切分剩余部分
+            reverse_cut_all(sentence[:len(sentence)-i], Dict, [word] + path, results)
+
+# 运行算法
+results = bidirectional_max_match(sentence, Dict)
+
+# 打印结果
+for i, cut in enumerate(results):
+    print(f"{i+1}: {cut}")

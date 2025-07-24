@@ -1,0 +1,89 @@
+#!/usr/bin/env python3  
+#coding: utf-8
+#作业2h13min-19min
+#基于训练好的词向量模型进行聚类
+#聚类采用Kmeans算法
+import math
+import re
+import json
+import jieba
+import numpy as np
+from gensim.models import Word2Vec
+from sklearn.cluster import KMeans
+from collections import defaultdict
+
+#输入模型文件路径
+#加载训练好的模型
+
+def load_sentence(path):
+    sentences = set()
+    with open(path, encoding="utf8") as f:
+        for line in f:
+            sentence = line.strip()
+            sentences.add(" ".join(jieba.cut(sentence)))
+    print("获取句子数量：", len(sentences))
+    # print(sentences)
+    return sentences
+
+#将文本向量化
+def all_sentences_to_vectors(sentences, model):
+    vectors = []
+    for sentence in sentences:
+        words = sentence.split()  #sentence是分好词的，空格分开
+        vector = np.zeros(model.vector_size)
+        #所有词的向量相加求平均，作为句子向量
+        for word in words:
+            try:
+                #model.wv[word]得到的就是这个词的向量表示。
+                vector += model.wv[word]
+            except KeyError:
+                #部分词在训练中未出现，用全0向量代替
+                vector += np.zeros(model.vector_size)
+        vectors.append(vector / len(words))
+    return np.array(vectors)
+def distan(center, cur_vector):
+    distance=0
+    for vec in cur_vector:
+        distance+= np.linalg.norm(vec - center)
+    return distance/len(cur_vector)
+
+def main():
+    model = Word2Vec.load("model.w2v") #加载词向量模型
+    sentences = load_sentence("titles.txt")  #加载所有标题
+    vectors = all_sentences_to_vectors(sentences, model)
+    #vectors是向量化之后的句子
+#cluster聚类
+    n_clusters = int(math.sqrt(len(sentences)))  #指定聚类数量
+    print("指定聚类数量：", n_clusters)
+    kmeans = KMeans(n_clusters)  #定义一个kmeans计算类
+    kmeans.fit(vectors)          #进行聚类计算
+    sentence_label_dict = defaultdict(list)
+    for sentence, label in zip(sentences, kmeans.labels_):  #取出句子和标签
+        sentence_label_dict[label].append(sentence)         #同标签的放到一起
+
+    all_kmeans_vectors=[]
+    distance_to_label={}
+    for label in sentence_label_dict.keys():
+        center = kmeans.cluster_centers_[label]
+        #一个聚类下所有句子
+        cur_cluster_context=sentence_label_dict[label]
+        #单个聚类所有句子向量化
+        sen_vector=all_sentences_to_vectors(cur_cluster_context, model)
+        all_kmeans_vectors.append(sen_vector)
+        centroid = np.mean(sen_vector)
+        distance_to_label[distan(centroid,sen_vector)]=label
+    sorted_cluster=sorted(distance_to_label.items(), key=lambda x:x[0])
+    # for label, sentences in sentence_label_dict.items():
+    #
+    #     print("cluster %s :" % label)
+    #     for i in range(min(10, len(sentences))): #随便打印几个，太多了看不过来
+    #         print(sentences[i].replace(" ", ""))
+    #     print("---------")
+    for index,(distance,label) in enumerate(sorted_cluster):
+        print(f"cluster {label} : 距中心平均距离为{distance},排{index+1}位" )
+        for j in range(min(10, len(sentence_label_dict[label]))): #随便打印几个，太多了看不过来
+            print(sentence_label_dict[label][j].replace(" ", ""))
+        print("---------")
+if __name__ == "__main__":
+    main()
+

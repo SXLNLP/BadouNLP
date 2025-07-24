@@ -1,0 +1,8 @@
+Embedding层：
+L*H+2*H+512*H 
+Transformer层:
+注意力机制：H*H*3
+前馈网络：H*4H+4H*H
+N*（11H^2）
+
+总bert参数量：(514+L)*H + N*（11H^2）

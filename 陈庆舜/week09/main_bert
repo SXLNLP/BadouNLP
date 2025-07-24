@@ -1,0 +1,104 @@
+# main_bert.py
+import json, torch, numpy as np, logging
+from torch.utils.data import DataLoader
+from transformers import BertTokenizerFast, BertForTokenClassification
+from torch.optim import AdamW            # 或 Adam，均可
+from torchcrf import CRF
+from config import Config                # 复用超参
+from loader import load_vocab
+
+# =========================================================
+# 1. 让 tokenizer 把数字 0-9 切成单独 token
+# =========================================================
+tokenizer = BertTokenizerFast.from_pretrained(Config["bert_path"])
+for d in "0123456789":
+    tokenizer.add_tokens(d)
+model = BertForTokenClassification.from_pretrained(
+            Config["bert_path"],
+            num_labels=Config["class_num"])
+model.resize_token_embeddings(len(tokenizer))
+
+# =========================================================
+# 2. 读取 schema 和构建 Dataset
+# =========================================================
+def load_schema(path):
+    with open(path, encoding="utf8") as f:
+        return json.load(f)
+
+label2id = load_schema(Config["schema_path"])
+
+class BertDataset(torch.utils.data.Dataset):
+    def __init__(self, data_path, tokenizer, label2id, max_len=100):
+        self.tok, self.max_len, self.l2i = tokenizer, max_len, label2id
+        self.samples = []
+        for seg in open(data_path, encoding="utf8").read().strip().split("\n\n"):
+            chars, labels = [], []
+            for line in seg.splitlines():
+                if not line.strip():
+                    continue
+                c, l = line.split()
+                chars.append(c)
+                labels.append(self.l2i[l])
+            enc = self.tok(chars,
+                           is_split_into_words=True,
+                           truncation=True,
+                           max_length=max_len,
+                           padding="max_length")
+            word_ids = enc.word_ids()
+            aligned_labels = [-100 if wid is None else labels[wid]
+                              for wid in word_ids]
+            self.samples.append({**enc,
+                                 "labels": aligned_labels})
+
+    def __len__(self): return len(self.samples)
+    def __getitem__(self, idx): return self.samples[idx]
+
+# 注意顺序：先定义 Dataset，再实例化
+train_ds = BertDataset(Config["train_data_path"], tokenizer, label2id, Config["max_length"])
+valid_ds = BertDataset(Config["valid_data_path"], tokenizer, label2id, Config["max_length"])
+
+# =========================================================
+# 3. collate_fn：把 list[dict] → dict[tensor]
+# =========================================================
+def collate_fn(batch):
+    # batch 是一个 list，每个元素是 dict[str, list]
+    keys = batch[0].keys()
+    out = {}
+    for k in keys:
+        # 把 list[int] 转成 torch.long
+        out[k] = torch.tensor([b[k] for b in batch], dtype=torch.long)
+    return out
+
+train_loader = DataLoader(train_ds,
+                          batch_size=Config["batch_size"],
+                          shuffle=True,
+                          collate_fn=collate_fn)
+valid_loader = DataLoader(valid_ds,
+                          batch_size=Config["batch_size"],
+                          shuffle=False,
+                          collate_fn=collate_fn)
+
+# =========================================================
+# 4. 训练 & 验证
+# =========================================================
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model.to(device)
+optimizer = AdamW(model.parameters(), lr=2e-5)
+
+for epoch in range(1, 6):
+    # ---- 训练 ----
+    model.train()
+    for batch in train_loader:
+        optimizer.zero_grad()
+        outputs = model(**{k: v.to(device) for k, v in batch.items()})
+        loss = outputs.loss if hasattr(outputs, 'loss') else outputs[0] # 下面写法也行
+        # if isinstance(outputs, tuple):
+        #     loss = outputs[0]  # transformers 返回 (loss, logits)
+        # else:
+        #     loss = outputs.loss  # 新版本返回 ModelOutput
+        loss.backward()
+        optimizer.step()
+    # ---- 验证 ----
+    model.eval()
+    # 这里可以接你自己的评估函数
+    print(f"Epoch {epoch} finished.")

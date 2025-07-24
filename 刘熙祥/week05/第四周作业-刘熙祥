@@ -1,0 +1,114 @@
+#!/usr/bin/env python3  
+#coding: utf-8
+
+#基于训练好的词向量模型进行聚类
+#聚类采用Kmeans算法
+import math
+import re
+import json
+import jieba
+import numpy as np
+from gensim.models import Word2Vec
+from sklearn.cluster import KMeans
+from collections import defaultdict
+
+#输入模型文件路径
+#加载训练好的模型
+"""
+作业 计算聚类内平均距离 排序输出
+问题：为什么每次聚类的结果都不一样   
+"""
+def load_word2vec_model(path):
+    model = Word2Vec.load(path)
+    return model
+
+def load_sentence(model, path):
+    sentences = set()
+    with open(path, encoding="utf8") as f:
+        for line in f:
+            sentence = line.strip()
+            # 添加低频词过滤
+            words = [
+                w for w in jieba.cut(sentence)
+                if model.wv.has_index_for(w)  # 新增过滤条件
+            ]
+            if words:
+                sentences.add(" ".join(jieba.cut(sentence)))
+    print("获取句子数量：", len(sentences))
+    return sentences
+
+#将文本向量化
+def sentences_to_vectors(sentences, model):
+    vectors = []
+    for sentence in sentences:
+        words = sentence.split()  #sentence是分好词的，空格分开
+        vector = np.zeros(model.vector_size)
+        # #所有词的向量相加求平均，作为句子向量
+        # for word in words:
+        #     try:
+        #         vector += model.wv[word]
+        #     except KeyError:
+        #         #部分词在训练中未出现，用全0向量代替
+        #         vector += np.zeros(model.vector_size)
+        # vectors.append(vector / len(words))
+
+        #TF-IDF加权平均
+        word_vectors = [model.wv[word] if word in model.wv else np.zeros(model.vector_size)
+                        for word in words]
+
+        for word in words:
+            try:
+                tfidf_weights = model.wv.get_vecattr(word, 'count')# 使用词频作为简单权重
+            except KeyError:
+                #部分词在训练中未出现，用全0向量代替
+                word_vectors += np.zeros(model.vector_size)
+                tfidf_weights = 1
+        weighted_vectors = np.array(word_vectors) * np.array(tfidf_weights).reshape(-1, 1)
+        vector = np.mean(weighted_vectors, axis=0)
+        vectors.append(vector)
+    return np.array(vectors)
+
+
+def main():
+    model = load_word2vec_model(r"C:\Users\43822\Desktop\week5 词向量及文本向量\model.w2v") #加载词向量模型
+    sentences = load_sentence(model, "titles.txt")  #加载所有标题
+    vectors = sentences_to_vectors(sentences, model)   #将所有标题向量化
+
+    n_clusters = int(math.sqrt(len(sentences)))  #指定聚类数量
+    print("指定聚类数量：", n_clusters)
+    kmeans = KMeans(n_clusters, algorithm="elkan", init="k-means++")
+    vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
+    #kmeans = KMeans(n_clusters)  #定义一个kmeans计算类
+    kmeans.fit(vectors)          #进行聚类计算
+
+    kmeans.cluster_centers_ = kmeans.cluster_centers_ / np.linalg.norm(
+        kmeans.cluster_centers_, axis=1, keepdims=True
+    )
+
+    cluster_distances = defaultdict(list)
+    for vector, label in zip(vectors, kmeans.labels_):
+        cluster_distance = np.dot(vector, kmeans.cluster_centers_[label]) / (
+            np.linalg.norm(vector) * np.linalg.norm(kmeans.cluster_centers_[label])
+        )
+        #cluster_distance = np.linalg.norm(vector - kmeans.cluster_centers_[label])
+        cluster_distances[label].append(cluster_distance)
+
+    avg_distances = {label: np.mean(dists) for label, dists in cluster_distances.items()}
+    sorted_labels = sorted(avg_distances, key=lambda x: avg_distances[x])
+
+    sentence_label_dict = defaultdict(list)
+    for sentence, label in zip(sentences, kmeans.labels_):  #取出句子和标签
+        sentence_label_dict[label].append(sentence)         #同标签的放到一起
+
+
+    for label in sorted_labels:
+        print(f"cluster {label} [平均距离：{avg_distances[label]:.5f}]")
+        sentences = sentence_label_dict[label]
+        for i in range(min(10, len(sentences))):  #随便打印几个，太多了看不过来
+            print(sentences[i].replace(" ", ""))
+        print("---------")
+
+if __name__ == "__main__":
+    main()
+

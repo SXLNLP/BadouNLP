@@ -1,0 +1,12 @@
+model	accuracy	epoch(采用早停策略)	learning_rate	pooling	句子最大token数
+bert_lstm	64.80%	3	1.00E-03	max	30
+fast_text	85.60%	10	1.00E-03	max	30
+fast_text	85.80%	10	1.00E-03	max	120
+fast_text	86.09%	8	1.00E-03	average	120
+fast_text	87.95%	8	1.00E-03	average	30
+bert	64.80%	3	1.00E-03	average	30
+					
+					
+总结（为什么bert效果不好）					
+这种任务比较简单，本质上模型只需要学会判断一些特定的否定色彩的词是否存在，就可以拿到较小的损失，自注意力机制来得到动态词向量其实没有用武之地，因为对语境的精准理解其实对任务没有太大帮助；另一方面，外接的一个简单线性层的拟合能力不够，无法充分利用bert给出的蕴含丰富信息的词向量，导致模型难以收敛；					
+average_pooling方法在这个任务上略优于max_pooling方法，尤其是对于fast_text而言，这可能是因为fast_text的词向量是静态的，average_pooling才能吸收上下文信息；如果采用max_pooling，有一些否定词可能被忽略，导致对句意的理解产生偏差					
