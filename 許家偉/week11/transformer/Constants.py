@@ -1,0 +1,4 @@
+PAD_WORD = '[PAD]'
+UNK_WORD = '[UNK]'
+BOS_WORD = '[CLS]'
+EOS_WORD = '[SEP]'

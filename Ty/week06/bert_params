@@ -1,0 +1,19 @@
+设词表大小为V，隐藏层维度为h，层数为l，最大输入长度为s
+embeddings	.word_embeddings  		=Vh
+			.position_embeddings		=sh
+			.token_type_embeddings 	=2h
+			.LayerNorm				=2h
+encoder.layer (*l)	.attention.	self.query		=h^2+h
+							.self.key			=h^2+h
+							.self.value		=h^2+h
+							.output.dense	=h^2+h
+							.LayerNorm		=2h
+				.intermediate.dense			=4h^2+4h
+						.output.dense		=4h^2+h
+						.LayerNorm			=2h
+pooler		=h^2+h
+
+总参数量 =(Vh+sh+2h+2h) + l * (4 * (h^2+h)+2h + 4h^2+4h+4h^2+h+2h) + (h^2+h)
+		=l*(12h^2+13h)+Vh+sh+h^2+5h
+ 		=102267648 (代入V=21128,h=768,l=12,s=512)
+

@@ -1,0 +1,54 @@
+# -*- coding: utf-8 -*-
+
+import torch  # 导入PyTorch深度学习框架
+import torch.nn as nn  # 导入PyTorch神经网络模块
+from torch.optim import Adam, SGD  # 导入优化器Adam和SGD
+from TorchCRF import CRF  # 导入条件随机场(CRF)模块
+from transformers import BertModel
+
+"""
+建立网络模型结构
+"""
+
+class TorchModel(nn.Module):
+    def __init__(self, config):  # 构造函数，接收配置字典config来初始化模型参数
+        super(TorchModel, self).__init__()  # 调用父类nn.Module的构造函数
+
+        class_num = config["class_num"]  # 获取类别数量
+        self.bert = BertModel.from_pretrained(config["bert_path"],local_files_only=True)
+        self.classify = nn.Linear(self.bert.config.hidden_size, class_num)  # 创建全连接层，将LSTM输出映射到标签空间
+        self.crf_layer = CRF(class_num, batch_first=True)  # 创建CRF层，用于序列标注任务
+        self.use_crf = config["use_crf"]  # 是否使用CRF
+        self.loss = torch.nn.CrossEntropyLoss(ignore_index=-1)  # 使用交叉熵损失函数，忽略index=-1的标签
+
+    # 当输入真实标签，返回loss值；无真实标签，返回预测值
+    def forward(self, x, target=None):  # 前向传播函数
+        x = self.bert(x)[0]  # BERT层处理,取 BERT 的 last_hidden_state
+        predict = self.classify(x)  # ouput:(batch_size, sen_len, num_tags) -> (batch_size * sen_len, num_tags)，全连接层输出
+
+        if target is not None:  # 训练模式
+            if self.use_crf:  # 如果使用CRF
+                mask = target.gt(-1)  # 创建mask，忽略标签为-1的位置
+                return - self.crf_layer(predict, target, mask, reduction="mean")  # 计算CRF负对数似然损失
+            else:  # 如果不使用CRF
+                # (number, class_num), (number)
+                return self.loss(predict.view(-1, predict.shape[-1]), target.view(-1))  # 计算交叉熵损失
+        else:  # 预测模式
+            if self.use_crf:  # 如果使用CRF
+                return self.crf_layer.decode(predict)  # 使用CRF解码预测结果
+            else:
+                return predict  # 直接返回预测结果
+
+
+def choose_optimizer(config, model):  # 选择优化器函数
+    optimizer = config["optimizer"]  # 从配置中获取优化器类型
+    learning_rate = config["learning_rate"]  # 从配置中获取学习率
+    if optimizer == "adam":  # 如果选择adam优化器
+        return Adam(model.parameters(), lr=learning_rate)  # 返回Adam优化器
+    elif optimizer == "sgd":  # 如果选择sgd优化器
+        return SGD(model.parameters(), lr=learning_rate)  # 返回SGD优化器
+
+
+if __name__ == "__main__":  # 程序入口
+    from config import Config  # 导入配置模块
+    model = TorchModel(Config)  # 创建模型实例

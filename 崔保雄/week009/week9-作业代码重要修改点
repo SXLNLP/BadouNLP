@@ -1,0 +1,27 @@
+config修改
+    1、增加配置项 "model_type":"lstm"   #lstm bert，用来区分基于哪种模型
+
+loader修改
+    1、__init__构造函数里面，加了属性 self.tokenizer = BertTokenizer.from_pretrained(config["bert_path"])
+    2、encode_sentence方法，要区分model_type是lstm，还是bert。如果是bert的话，就使用tokenizer.encode(text)
+
+model修改
+    1、__init__构造函数方法里，定义模型结构的时候，要区分是否是bert模型。
+      是bert模型的话。下一个Linear层的in_features参数要使用bert层的输出数据维度，可以从bert配置文件里取
+            self.layer = BertModel.from_pretrained(config["bert_path"], return_dict=False)
+            hidden_size = self.layer.config.hidden_size
+            self.classify = nn.Linear(hidden_size, class_num)
+    2、forward函数方法里要区分是否是bert模型。
+        是bert模型的话，不需要过一个embedding层，直接使用bert的encode编码，充分利用bert预训练成果
+        sequence_output, pooler_output = self.layer(x)
+        predict = self.classify(sequence_output)
+
+predict（新建的模块，用于加载模型进行预测）
+
+main修改
+        增加以下代码：
+        """ 使用已经训练好的模型进行预测 """
+        predict = Predict(Config)
+        text = "全国政协委员、清华大学中国与世界经济研究中心主任李稻葵指出，2018年中国面临三大攻坚战中，风险防控是第一位的。"
+        output = predict.predict(text)
+        print(output)

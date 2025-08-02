@@ -1,0 +1,2 @@
+model,accuracy,training_time,model_type,learning_rate,hidden_size,batch_size,epoch
+fast_text,"(0.5723270440251572, 0.013190984725952148)",0.8953428268432617,fast_text,0.001,64,64,1

@@ -1,0 +1,2 @@
+hyper_params_index	max_length	hidden_size	epoch	batch_size	epoch_data_size	optimizer	learning_rate
+1	20	128	10	32	200	adam	1.00E-03
