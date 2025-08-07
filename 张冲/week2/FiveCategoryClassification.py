@@ -5,17 +5,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+# 作业:五分类任务
+
 class ClassificationModel(nn.Module):
     def __init__(self, input_size, output_size):
         super(ClassificationModel, self).__init__()
         self.linear = nn.Linear(input_size, output_size)
-        self.activation = torch.softmax
+        # self.normalize = nn.functional.normalize
+        # self.activation = nn.functional.softmax
+        # self.loss = nn.functional.nll_loss
         self.loss = nn.functional.cross_entropy
 
     # 当输入真实标签，返回loss值；无真实标签，返回预测值
     def forward(self, x, y=None):
-        x = self.linear(x)  # (batch_size, input_size) -> (batch_size, 1)
-        y_pred = self.activation(x, -1)  # (batch_size, 1) -> (batch_size, 1)
+        y_pred = self.linear(x)  # (batch_size, input_size) -> (batch_size, 1)
+        # y_pred = self.normalize(x)
+        # y_pred = self.activation(x)  # (batch_size, 1) -> (batch_size, 1)
         if y is not None:
             return self.loss(y_pred, y)  # 预测值和真实值计算损失
         else:
@@ -28,7 +33,8 @@ def build_sample():
     x_max_index = np.argmax(x)
     y = np.zeros(5)
     y[x_max_index] = 1
-    return x, y
+    # return x, y
+    return x, x_max_index
 
 
 # 随机生成一批样本
@@ -40,7 +46,7 @@ def build_dataset(total_sample_num):
         x, y = build_sample()
         X.append(x)
         Y.append(y)
-    return torch.FloatTensor(X), torch.FloatTensor(Y)
+    return torch.FloatTensor(X), torch.LongTensor(Y)
 
 
 # 测试代码
@@ -53,19 +59,19 @@ def evaluate(model):
     with torch.no_grad():
         y_pred = model(x)  # 模型预测 model.forward(x)
         for y_p, y_t in zip(y_pred, y):  # 与真实标签进行对比
-            success = True
-            for y_p_item, y_t_item in zip(y_p, y_t):
-                if y_p_item < 0.5 and y_t_item == 1:
-                    success = False
-                    break
-                elif y_p_item >= 0.5 and y_t_item == 0:
-                    success = False
-                    break
+            success = np.argmax(y_p) == y_t
+            # for y_p_item, y_t_item in zip(y_p, y_t):
+            #     if y_p_item < 0.5 and y_t_item == 1:
+            #         success = False
+            #         break
+            #     elif y_p_item >= 0.5 and y_t_item == 0:
+            #         success = False
+            #         break
             if success:
                 correct += 1
             else:
                 wrong += 1
-    print("正确预测个数：%d,总个数 %d, 正确率：%f, " % (correct, wrong, correct / (correct + wrong)))
+    print("正确预测个数：%d,错误预测个数 %d, 正确率：%f, " % (correct, wrong, correct / (correct + wrong)))
     return correct / (correct + wrong)
 
 
@@ -109,6 +115,7 @@ def train():
     plt.show()
     return
 
+
 # 使用训练好的模型做预测
 def predict(model_path, pred_size):
     input_size = 5
@@ -122,9 +129,9 @@ def predict(model_path, pred_size):
         result = model.forward(torch.FloatTensor(input_vec))  # 模型预测
     for vec, res in zip(input_vec, result):
         vec_max_index = np.argmax(vec)
-        res_max_index = np.argmax(res)
-        print("输入：%s, 实际分类%d,  预测概率最大分类%d,  概率为%f" % (
-        vec, vec_max_index, res_max_index, res[res_max_index]))  # 打印结果
+        res_max_index = np.argmax(res),
+        print(
+            f"输入：{vec}, 实际分类{vec_max_index},  预测概率最大分类{res_max_index},  概率为{res[res_max_index]}")  # 打印结果
 
 
 if __name__ == "__main__":
