@@ -1,0 +1,63 @@
+// 1. 创建 Person 节点
+CREATE 
+(p1:Person {id: 'P001', name: '张伟', title: '教授', research_interests: '自然语言处理、知识图谱', email: 'zw@example.com', born: 1975}),
+(p2:Person {id: 'P002', name: '李静', title: '副教授', research_interests: '计算机视觉、机器学习', email: 'lj@example.org', born: 1982}),
+(p3:Person {id: 'P003', name: '王鹏', title: '博士生', research_interests: '图神经网络、推荐系统', email: 'wp@example.net', born: 1990})
+
+// 2. 创建 Paper 节点
+CREATE 
+(paper1:Paper {id: 'Paper001', title: '一种新颖的动态知识图谱构建方法', abstract: '本文提出了一种基于深度学习的动态知识图谱构建模型，该模型能有效处理流式数据并实时更新图谱结构。', year: 2023, venue: 'ACM SIGIR', doi: '10.1145/xxxxxx.xxxxxx'}),
+(paper2:Paper {id: 'Paper002', title: '基于多模态学习的视觉语言预训练模型', abstract: '本研究探索了如何融合图像和文本信息进行预训练，并在多个下游任务中取得了state-of-the-art的性能。', year: 2022, venue: 'IEEE CVPR', doi: '10.1109/CVPR.2022.xxxxx'})
+
+// 3. 创建 Organization 节点
+CREATE 
+(org1:Organization {id: 'Org001', name: '人工智能前沿实验室', type: '研究所', location: '中国北京', founded: 2010}),
+(org2:Organization {id: 'Org002', name: '数据科学与工程学院', type: '学院', location: '中国上海', founded: 2005})
+
+// 4. 创建 Concept 节点
+CREATE 
+(c1:Concept {id: 'C001', name: '知识图谱', description: '一种用图模型来描述知识和建模事物之间关联关系的技术', field: '人工智能'}),
+(c2:Concept {id: 'C002', name: 'Transformer', description: '一种基于自注意力机制的深度学习模型架构，已成为NLP领域的基础模型。', field: '自然语言处理'}),
+(c3:Concept {id: 'C003', name: '图神经网络', description: '直接作用于图结构上的神经网络，用于学习节点、边或整个图的表示。', field: '机器学习'})
+
+// 5. 创建关系：人物 -撰写-> 论文
+MATCH (p:Person {id: 'P001'}), (paper:Paper {id: 'Paper001'})
+CREATE (p)-[:AUTHORED_BY {role: '第一作者'}]->(paper);
+
+MATCH (p:Person {id: 'P002'}), (paper:Paper {id: 'Paper001'})
+CREATE (p)-[:AUTHORED_BY {role: '通讯作者'}]->(paper);
+
+MATCH (p:Person {id: 'P003'}), (paper:Paper {id: 'Paper002'})
+CREATE (p)-[:AUTHORED_BY {role: '共同一作'}]->(paper);
+
+// 6. 创建关系：人物 -工作于-> 机构
+MATCH (p:Person {id: 'P001'}), (org:Organization {id: 'Org001'})
+CREATE (p)-[:WORKS_AT {since: 2015}]->(org);
+
+MATCH (p:Person {id: 'P002'}), (org:Organization {id: 'Org002'})
+CREATE (p)-[:WORKS_AT {since: 2018}]->(org);
+
+MATCH (p:Person {id: 'P003'}), (org:Organization {id: 'Org001'})
+CREATE (p)-[:WORKS_AT {since: 2020}]->(org);
+
+// 7. 创建关系：论文 -发表于-> 机构
+MATCH (paper:Paper {id: 'Paper001'}), (org:Organization {id: 'Org001'})
+CREATE (paper)-[:PUBLISHED_IN]->(org);
+
+// 8. 创建关系：论文 -包含-> 概念
+MATCH (paper:Paper {id: 'Paper001'}), (c:Concept {id: 'C001'})
+CREATE (paper)-[:CONTAINS {importance: '核心'}]->(c);
+
+MATCH (paper:Paper {id: 'Paper001'}), (c:Concept {id: 'C003'})
+CREATE (paper)-[:CONTAINS {importance: '次要'}]->(c);
+
+MATCH (paper:Paper {id: 'Paper002'}), (c:Concept {id: 'C002'})
+CREATE (paper)-[:CONTAINS {importance: '核心'}]->(c);
+
+// 9. 创建关系：论文 -引用-> 论文
+MATCH (paper1:Paper {id: 'Paper001'}), (paper2:Paper {id: 'Paper002'})
+CREATE (paper1)-[:CITES]->(paper2);
+
+// 10. 创建关系：概念 -隶属于-> 概念 (构建层级)
+MATCH (c_sub:Concept {id: 'C003'}), (c_parent:Concept {id: 'C001'})
+CREATE (c_sub)-[:SUB_CONCEPT_OF]->(c_parent);

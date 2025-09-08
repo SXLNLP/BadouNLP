@@ -1,0 +1,27 @@
+{
+  "entitys": [
+    "大R",
+    "B级",
+    "Coinpusher",
+    "StoreCommon",
+    "coins",
+    "Piggy",
+    "小R"
+  ],
+  "relations": [
+    "包含",
+    "付费争夺",
+    "主要购买人群"
+  ],
+  "labels": [
+    "非金币项",
+    "金币项"
+  ],
+  "attributes": [
+    "所属系统",
+    "中文名称",
+    "pidtype",
+    "NAME",
+    "pidclass"
+  ]
+}

@@ -1,0 +1,7 @@
+Coinpusher	主要购买人群	大R
+Piggy	主要购买人群	大R
+StoreCommon	主要购买人群	小R
+B级	包含	Coinpusher
+coins	包含	Piggy
+coins	包含	StoreCommon
+coins	付费争夺	B级
