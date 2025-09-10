@@ -1,0 +1,33 @@
+[
+{
+"id":"node1",
+"intent":["我要看电影"],
+"slot":["#电影名称#", "#观看时间#", "#购票人次#"],
+"action":["BUY_TICKET"],
+"response":"已为您购票，#电影名称#，#观看时间#，#购票人次#。你可以选择付款或继续购买可乐/爆米花。",
+"childnode":["node2", "node3", "node4"]
+},
+{
+"id":"node2",
+"intent":["买个爆米花"],
+"slot":["#爆米花型号#", "#爆米花数量#"],
+"action":["BUY_POPCORN"],
+"response":"好的，已为您购买#爆米花数量##爆米花型号#爆米花。",
+"childnode":["node3", "node4"]
+},
+{
+"id":"node3",
+"intent":["来杯可乐"],
+"slot":["#可乐数量#"],
+"action":["BUY_COLA"],
+"response":"好的，已为您购买#可乐数量#可乐。",
+"childnode":["node2", "node4"]
+},
+{
+"id":"node4",
+"intent":["付款"],
+"slot":["#电影-付款方式#"],
+"action":["TAKE_ORDER"],
+"response":"使用#电影-付款方式#支付，支付成功后，等待打印小票后可离开，谢谢惠顾！"
+}
+]
