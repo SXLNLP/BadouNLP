@@ -1,0 +1,53 @@
+[
+  {
+    "id": "node1",
+    "intent": [
+      "我要看电影"
+    ],
+    "slot": [
+      "#时间#",
+      "#电影类型#"
+    ],
+    "response": "为您找到xx",
+    "childnode": [
+      "node2",
+      "node3",
+      "repeat_node"
+    ]
+  },
+  {
+    "id": "node2",
+    "intent": [
+      "来个爆米花"
+    ],
+    "response": "给你爆米花",
+    "childnode": [
+      "node3",
+      "repeat_node"
+    ]
+  },
+  {
+    "id": "node3",
+    "intent": [
+      "来个可乐"
+    ],
+    "response": "好的，给你可乐",
+    "childnode": [
+      "repeat_node"
+    ]
+  },
+  {
+    "id": "repeat_node",
+    "intent": [
+      "我没听清楚",
+      "请你重复一遍",
+      "可以重说一遍吗"
+    ],
+    "response": "抱歉，刚才的问题是：您想看电影的时间和类型，请告诉我。",
+    "childnode": [
+      "node1",
+      "node2",
+      "node3"
+    ]
+  }
+]
