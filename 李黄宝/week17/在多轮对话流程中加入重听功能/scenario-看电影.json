@@ -1,0 +1,28 @@
+[
+    {
+        "id": "node1",
+        "intent": ["我要买电影票", "我要看电影"],
+        "slot": ["#电影类型#", "#电影名称#"],
+        "response": "为您推荐，#电影类型# - #电影名称# 3DMAX厅, 请问是否购买？",
+        "childnode": ["node2", "node3", "node4"]
+    },
+    {
+        "id": "node2",
+        "intent": ["来个爆米花"],
+        "response": "好的已为您架构爆米花, 请问怎么支付？",
+        "childnode": ["node3", "node4"]
+    },
+    {
+        "id": "node3",
+        "intent": ["可以分期付款吗"],
+        "slot": ["#分期付款期数#", "#支付方式#"],
+        "action": ["MAKE_PAYMENT"],
+        "response": "好的，为您办理分期付款，分#分期付款期数#期，使用#支付方式#支付，谢谢惠顾"
+    },
+    {
+        "id": "node4",
+        "intent": ["我买了","现金支付","支付宝支付"],
+        "action": ["TAKE_ORDER"],
+        "response": "已为您下单，谢谢惠顾，流程结束"
+    }
+]
