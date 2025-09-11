@@ -1,5 +1,0 @@
-question,cypher,check,answer
-%ENT%的作用是什么,MATCH (n) WHERE n.NAME='%ENT%' RETURN n.作用 as answer,{"%ENT%": 1},%ENT%的作用是%answer%
-%ENT%函数应用于什么场景,MATCH (n)-[:应用于]->(m) WHERE n.NAME='%ENT%' RETURN m.NAME as answer,{"%ENT%": 1},%ENT%函数应用于%answer%场景
-%ENT%的使用频率如何,MATCH (n) WHERE n.NAME='%ENT%' RETURN n.使用频率 as answer,{"%ENT%": 1},%ENT%的使用频率是%answer%
-哪些函数属于%ENT%,MATCH (m)-[:包含]->(n) WHERE m.NAME='%ENT%' RETURN n.NAME as answer,{"%ENT%": 1},属于%ENT%的函数有%answer%

@@ -1,7 +1,0 @@
-moss	RoPE	并行	传统方式	传统方式	Layernorm/pre norm	GELU	无bias
-qwen	RoPE	串行	传统方式	gated形式	RMSnorm/pre norm	SiLU	qkv有bias，其他线性层无bias
-Mixtral	RoPE	串行	group query	MOE形式	RMSnorm/pre norm	RELU	无bias
-grok1	RoPE	串行	group query	MOE形式	RMSnorm/sandwich norm	RELU	无bias
-gemma	RoPE	串行	group query	gated形式	RMSnorm/pre norm	GELU	无bias
-DBRX	RoPE	串行	group query	MOE形式	LayerNorm/sandwich norm	GELU	无bias
-llama4	RoPE	串行	group query	MOE形式	RMSnorm/pre norm	SiLU	无bias

@@ -1,8 +1,0 @@
-模型	位置编码	transformer结构	多头机制	FFN层设计	归一化层	激活函数	Bias策略
-通义千问	RoPE	串行	传统方式	Gated形式	RMSNorm-pre norm	SiLu	qkv有bias，其余无
-KIMI	RoPE	串行	传统方式	Gated形式	RMSNorm-pre norm	SiLu	无bias
-Deepseek	RoPE	串行	Grouped-Query	Gated形式	RMSNorm-pre norm	SiLu	无bias
-ChatGLM3	RoPE	串行	Multi-Query	Gated形式	RMSNorm-pre norm	Gelu	无bias
-Baichuan2	RoPE	串行	传统方式	Gated形式	RMSNorm-pre norm	SiLu	qkv有bias，其余无
-LLaMA-2 7B	RoPE	串行	传统方式	Gated形式	RMSNorm-pre norm	SiLu	无bias
-Mistral-7B	RoPE	串行	Grouped-Query	Gated形式	RMSNorm-pre norm	SiLu	无bias

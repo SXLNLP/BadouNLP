@@ -1,1 +1,0 @@
-ptint("Hello world!")

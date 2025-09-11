@@ -1,6 +1,0 @@
-,位置编码(ROPE还是Alibi）,transformer结构（串行还是平行）,多头机制（传统方式还是multi query）,ff层设计（传统方式还是gated形式）,归一化层选择（RMSnorm还是 Layernorm）,激活函数（SILU还是gelu还是relu）,各层矩阵是否使用了bias
-chatglm1,rope,串行,Grouped Query Attention,Gated FFN,RMSNorm,GELU,是
-chatglm2,rope,串行,Grouped Query Attention,Gated FFN,RMSNorm,SiLU,仅QKV有偏置
-deepseek-v3,rope,串行,MLA,MOE,RMSNorm,SiLU,无
-llama2,rope,串行,Grouped Query Attention,Gated FFN,RMSNorm,SiLU,无
-qwen-7B,rope,串行,传统,Gated FFN,RMSNorm,SiLU,仅QKV有偏置

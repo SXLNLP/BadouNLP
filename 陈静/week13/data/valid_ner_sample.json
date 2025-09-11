@@ -1,5 +1,0 @@
-{"text": "赵六在杭州阿里巴巴工作", "labels": ["B-PER", "I-PER", "O", "B-LOC", "I-LOC", "B-ORG", "I-ORG", "I-ORG", "I-ORG", "I-ORG", "O", "O"]}
-{"text": "孙悟空是神话人物", "labels": ["B-PER", "I-PER", "I-PER", "O", "O", "O", "O", "O"]}
-{"text": "中国银行在香港上市", "labels": ["B-ORG", "I-ORG", "I-ORG", "I-ORG", "O", "B-LOC", "I-LOC", "O", "O"]}
-{"text": "iPhone是苹果的产品", "labels": ["B-MISC", "I-MISC", "I-MISC", "I-MISC", "I-MISC", "I-MISC", "O", "B-ORG", "I-ORG", "O", "O", "O"]}
-{"text": "北京大学很有名", "labels": ["B-ORG", "I-ORG", "I-ORG", "I-ORG", "O", "O", "O"]}

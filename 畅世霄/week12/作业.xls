@@ -1,4 +1,0 @@
-QWEN-7b	ROPE	串行	传统方式	gated	Rmsnorm	silu	部分使用
-mixtral	ROPE	串行	multi query	gated形式	Rmsnorm	silu	无
-grok1	ROPE	串行	multi query	gated形式	Rmsnorm	GELU	无
-deepseekV3	ROPE	串行	multi query	gated形式	Rmsnorm	silu	部分使用

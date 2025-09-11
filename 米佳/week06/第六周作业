@@ -1,8 +1,0 @@
-from transformers import BertModel
-def bertParameterCount():
-    bert = BertModel.from_pretrained(r"D:\AI\课程\第六周 语言模型与预训练\第六周 语言模型\bert-base-chinese\bert-base-chinese", return_dict=False)
-    sum_parameters = sum(p.numel() for p in bert.state_dict().values())
-    print("参数总量：{}个".format(sum_parameters))
-    sum_practice_parameters = sum(p.numel() for p in bert.parameters() if p.requires_grad)
-    print("可训练参数量：{}个".format(sum_practice_parameters))
-    bertParameterCount()

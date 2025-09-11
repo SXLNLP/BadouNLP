@@ -1,4 +1,0 @@
-实现BBPE算法，包括Init、Encoding和Decoding
-Init：根据文本来自动生成字节级的词表
-Encoding：根据词表和输入文本来自动生成token序列
-Decoding：根据词表和token序列，来还原目标文本
