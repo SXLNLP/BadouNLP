@@ -1,0 +1,20 @@
+BERT（谷歌2018年发布的预训练模型）	提出时间	2018年
+BERT（谷歌2018年发布的预训练模型）	论文标题	"BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+Transformer模型	发表年份	2017
+Transformer模型	论文标题	"Attention Is All You Need"
+GPT_3	参数量	1750亿
+Word2Vec	训练算法	"CBOW和Skip_gram"
+斯坦福CoreNLP	编程语言	Java
+spaCy	开源协议	MIT License
+ALBERT	主要贡献	减少内存消耗
+ELMo	提出时间	2018年
+T5模型	发布机构	"Google Research"
+TextRank算法	论文引用数	10000+
+BERT（谷歌2018年发布的预训练模型）	主要任务	掩码语言模型
+Transformer模型	主要组件	"编码器-解码器结构"
+GPT_3	训练数据	"Common Crawl"
+Word2Vec	输出	词向量
+斯坦ford_CoreNLP	支持格式	JSON、XML
+spaCy	最新版本	3.5
+ALBERT	比赛成绩	GLUE榜单前列
+ELMo	预训练方式	双向语言模型

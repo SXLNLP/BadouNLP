@@ -1,0 +1,5 @@
+Piggy（Moneybank金币项）	pidtype	coins
+Piggy（Moneybank金币项）	中文名称	小猪
+StoreCommon（Store金币项）	pidtype	coins
+Coinpusher（推币机非金币项）	所属系统	B级
+Coinpusher（推币机非金币项）	pidclass	B
